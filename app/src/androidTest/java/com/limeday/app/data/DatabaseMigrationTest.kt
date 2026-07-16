@@ -1,0 +1,109 @@
+package com.limeday.app.data
+
+import android.content.Context
+import android.database.sqlite.SQLiteDatabase
+import androidx.room.Room
+import androidx.test.core.app.ApplicationProvider
+import androidx.test.ext.junit.runners.AndroidJUnit4
+import java.io.File
+import kotlinx.coroutines.runBlocking
+import org.junit.After
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
+import org.junit.Test
+import org.junit.runner.RunWith
+
+@RunWith(AndroidJUnit4::class)
+class DatabaseMigrationTest {
+    private val context = ApplicationProvider.getApplicationContext<Context>()
+    private val databaseNames = mutableListOf<String>()
+
+    @After
+    fun cleanUp() {
+        databaseNames.forEach(context::deleteDatabase)
+    }
+
+    @Test
+    fun roomV1MigratesWithoutLosingTodoOrReview() = runBlocking {
+        val database = openMigratedDatabase(version = 1)
+
+        assertEquals("迁移待办", database.limeDayDao().allTodos().single().title)
+        assertTrue(database.limeDayDao().allTodos().single().isCompleted)
+        assertEquals("旧版亮点", database.limeDayDao().allReviews().single().highlight)
+        assertTrue(database.limeDayDao().allSummaries().isEmpty())
+        assertEquals(1, database.limeDayDao().metadata()?.legacyMigrationVersion)
+        database.close()
+    }
+
+    @Test
+    fun roomV2MigratesSummaryAndCreatesSyncMetadata() = runBlocking {
+        val database = openMigratedDatabase(version = 2)
+
+        assertEquals("旧版总结", database.limeDayDao().allSummaries().single().content)
+        val todo = database.limeDayDao().allTodos().single()
+        assertFalse(todo.id == "1")
+        assertTrue(todo.deviceId.isNotBlank())
+        assertEquals(2, database.limeDayDao().metadata()?.legacyMigrationVersion)
+        database.close()
+    }
+
+    @Test
+    fun driftV3MigratesToNativeRoomV4() = runBlocking {
+        val database = openMigratedDatabase(version = 3)
+
+        assertEquals("flutter-id", database.limeDayDao().allTodos().single().id)
+        assertEquals(7, database.limeDayDao().allTodos().single().revision)
+        assertEquals("flutter-device", database.limeDayDao().metadata()?.deviceId)
+        assertEquals(4, database.limeDayDao().metadata()?.schemaVersionValue)
+        database.close()
+    }
+
+    private fun openMigratedDatabase(version: Int): AppDatabase {
+        val name = "migration-$version-${System.nanoTime()}.db"
+        databaseNames += name
+        val file = context.getDatabasePath(name)
+        file.parentFile?.mkdirs()
+        if (version <= 2) createRoomLegacy(file, version) else createDriftV3(file)
+        return Room.databaseBuilder(context, AppDatabase::class.java, name)
+            .addMigrations(
+                AppDatabase.MIGRATION_1_4,
+                AppDatabase.MIGRATION_2_4,
+                AppDatabase.MIGRATION_3_4
+            )
+            .build()
+            .also { it.openHelper.writableDatabase }
+    }
+
+    private fun createRoomLegacy(file: File, version: Int) {
+        SQLiteDatabase.openOrCreateDatabase(file, null).use { db ->
+            db.execSQL("CREATE TABLE todos (id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, date TEXT NOT NULL, title TEXT NOT NULL, note TEXT NOT NULL, isCompleted INTEGER NOT NULL, createdAt INTEGER NOT NULL)")
+            db.execSQL("CREATE INDEX index_todos_date ON todos(date)")
+            db.execSQL("CREATE TABLE daily_reviews (date TEXT NOT NULL PRIMARY KEY, highlight TEXT NOT NULL, challenge TEXT NOT NULL, learning TEXT NOT NULL, tomorrowFocus TEXT NOT NULL, mood INTEGER NOT NULL, updatedAt INTEGER NOT NULL)")
+            if (version == 2) {
+                db.execSQL("CREATE TABLE daily_summaries (date TEXT NOT NULL PRIMARY KEY, content TEXT NOT NULL, provider TEXT NOT NULL, model TEXT NOT NULL, generatedAt INTEGER NOT NULL)")
+            }
+            db.execSQL("INSERT INTO todos VALUES (1, '2026-07-16', '迁移待办', '备注', 1, 1000)")
+            db.execSQL("INSERT INTO daily_reviews VALUES ('2026-07-16', '旧版亮点', '', '旧版收获', '明日重点', 4, 2000)")
+            if (version == 2) db.execSQL("INSERT INTO daily_summaries VALUES ('2026-07-16', '旧版总结', 'OpenAI 兼容', 'test-model', 3000)")
+            db.version = version
+        }
+    }
+
+    private fun createDriftV3(file: File) {
+        SQLiteDatabase.openOrCreateDatabase(file, null).use { db ->
+            db.execSQL("CREATE TABLE todos (id TEXT NOT NULL PRIMARY KEY, date TEXT NOT NULL, title TEXT NOT NULL, note TEXT NOT NULL DEFAULT '', is_completed INTEGER NOT NULL DEFAULT 0, sort_order TEXT NOT NULL, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, deleted_at INTEGER, device_id TEXT NOT NULL, revision INTEGER NOT NULL DEFAULT 1)")
+            db.execSQL("CREATE INDEX todos_date_idx ON todos(date)")
+            db.execSQL("CREATE TABLE daily_reviews (id TEXT NOT NULL PRIMARY KEY, date TEXT NOT NULL UNIQUE, highlight TEXT NOT NULL DEFAULT '', challenge TEXT NOT NULL DEFAULT '', learning TEXT NOT NULL DEFAULT '', tomorrow_focus TEXT NOT NULL DEFAULT '', mood INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, deleted_at INTEGER, device_id TEXT NOT NULL, revision INTEGER NOT NULL DEFAULT 1)")
+            db.execSQL("CREATE INDEX reviews_date_idx ON daily_reviews(date)")
+            db.execSQL("CREATE TABLE daily_summaries (id TEXT NOT NULL PRIMARY KEY, date TEXT NOT NULL UNIQUE, content TEXT NOT NULL, provider TEXT NOT NULL, model TEXT NOT NULL, generated_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, deleted_at INTEGER, device_id TEXT NOT NULL, revision INTEGER NOT NULL DEFAULT 1)")
+            db.execSQL("CREATE INDEX summaries_date_idx ON daily_summaries(date)")
+            db.execSQL("CREATE TABLE app_metadata (id INTEGER NOT NULL PRIMARY KEY DEFAULT 1, device_id TEXT NOT NULL, schema_version_value INTEGER NOT NULL, legacy_migration_version INTEGER NOT NULL DEFAULT 0)")
+            db.execSQL("INSERT INTO todos VALUES ('flutter-id', '2026-07-16', 'Flutter 待办', '', 0, '1', 1000, 2000, NULL, 'flutter-device', 7)")
+            db.execSQL("INSERT INTO daily_reviews VALUES ('review-id', '2026-07-16', '亮点', '', '', '', 3, 1000, 2000, NULL, 'flutter-device', 2)")
+            db.execSQL("INSERT INTO daily_summaries VALUES ('summary-id', '2026-07-16', '总结', 'provider', 'model', 2000, 2000, NULL, 'flutter-device', 2)")
+            db.execSQL("INSERT INTO app_metadata VALUES (1, 'flutter-device', 3, 2)")
+            db.version = 3
+        }
+    }
+}

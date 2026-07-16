@@ -5,9 +5,9 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.limeday.app.ui.DayScreen
 import com.limeday.app.ui.DayViewModel
 import com.limeday.app.ui.DayViewModelFactory
+import com.limeday.app.ui.LimeDayApp
 import com.limeday.app.ui.theme.LimeDayTheme
 
 class MainActivity : ComponentActivity() {
@@ -16,15 +16,19 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             LimeDayTheme {
-                val application = application as LimeDayApplication
+                val app = application as LimeDayApplication
                 val viewModel: DayViewModel = viewModel(
                     factory = DayViewModelFactory(
-                        application.repository,
-                        application.llmConfigStore,
-                        application.llmClient
+                        repository = app.repository,
+                        llmConfigStore = app.llmConfigStore,
+                        llmClient = app.llmClient,
+                        webDavConfigStore = app.webDavConfigStore,
+                        webDavClient = app.webDavClient,
+                        syncCoordinator = app.syncCoordinator,
+                        application = app
                     )
                 )
-                DayScreen(viewModel)
+                LimeDayApp(viewModel)
             }
         }
     }

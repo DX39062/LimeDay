@@ -20,9 +20,9 @@ class DayUiStateTest {
         val state = DayUiState(
             selectedDate = LocalDate.parse(date),
             todos = listOf(
-                TodoItem(id = 1, date = date, title = "A", isCompleted = true),
-                TodoItem(id = 2, date = date, title = "B"),
-                TodoItem(id = 3, date = date, title = "C")
+                todo("1", date, "A", completed = true),
+                todo("2", date, "B"),
+                todo("3", date, "C")
             ),
             isLoading = false
         )
@@ -30,4 +30,13 @@ class DayUiStateTest {
         assertEquals(1, state.completedCount)
         assertEquals(33, state.progressPercent)
     }
+
+    private fun todo(id: String, date: String, title: String, completed: Boolean = false) = TodoItem(
+        id = id,
+        date = date,
+        title = title,
+        isCompleted = completed,
+        sortOrder = id,
+        deviceId = "device-a"
+    )
 }

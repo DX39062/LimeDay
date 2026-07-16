@@ -8,45 +8,58 @@ import androidx.compose.runtime.Composable
 
 private val LightColors = lightColorScheme(
     primary = Mint,
-    onPrimary = FreshSurface,
+    onPrimary = SurfaceLight,
     primaryContainer = MintContainer,
     onPrimaryContainer = Ink,
-    secondary = Sunshine,
-    background = FreshBackground,
+    secondary = Marigold,
+    onSecondary = SurfaceLight,
+    secondaryContainer = MarigoldContainer,
+    onSecondaryContainer = Ink,
+    tertiary = Coral,
+    onTertiary = SurfaceLight,
+    tertiaryContainer = CoralContainer,
+    onTertiaryContainer = Ink,
+    background = Paper,
     onBackground = Ink,
-    surface = FreshSurface,
+    surface = SurfaceLight,
     onSurface = Ink,
-    surfaceVariant = ColorTokens.LightSurfaceVariant,
-    onSurfaceVariant = ColorTokens.LightOnSurfaceVariant
+    surfaceVariant = SurfaceContainerLight,
+    onSurfaceVariant = MutedInk,
+    surfaceContainer = SurfaceContainerLight,
+    outlineVariant = androidx.compose.ui.graphics.Color(0xFFD9DEDB)
 )
 
 private val DarkColors = darkColorScheme(
     primary = MintDark,
-    onPrimary = ColorTokens.DarkOnPrimary,
+    onPrimary = androidx.compose.ui.graphics.Color(0xFF00382E),
     primaryContainer = MintContainerDark,
     onPrimaryContainer = InkDark,
-    secondary = Sunshine,
-    background = FreshBackgroundDark,
+    secondary = MarigoldDark,
+    onSecondary = androidx.compose.ui.graphics.Color(0xFF452B00),
+    secondaryContainer = MarigoldContainerDark,
+    onSecondaryContainer = InkDark,
+    tertiary = CoralDark,
+    onTertiary = androidx.compose.ui.graphics.Color(0xFF5F111B),
+    tertiaryContainer = CoralContainerDark,
+    onTertiaryContainer = InkDark,
+    background = PaperDark,
     onBackground = InkDark,
-    surface = FreshSurfaceDark,
+    surface = SurfaceDark,
     onSurface = InkDark,
-    surfaceVariant = ColorTokens.DarkSurfaceVariant,
-    onSurfaceVariant = ColorTokens.DarkOnSurfaceVariant
+    surfaceVariant = SurfaceContainerDark,
+    onSurfaceVariant = MutedInkDark,
+    surfaceContainer = SurfaceContainerDark,
+    outlineVariant = androidx.compose.ui.graphics.Color(0xFF3E4743)
 )
-
-private object ColorTokens {
-    val LightSurfaceVariant = androidx.compose.ui.graphics.Color(0xFFE8F0ED)
-    val LightOnSurfaceVariant = androidx.compose.ui.graphics.Color(0xFF52635E)
-    val DarkOnPrimary = androidx.compose.ui.graphics.Color(0xFF08372E)
-    val DarkSurfaceVariant = androidx.compose.ui.graphics.Color(0xFF263530)
-    val DarkOnSurfaceVariant = androidx.compose.ui.graphics.Color(0xFFB8C9C3)
-}
 
 @Composable
 fun LimeDayTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
     content: @Composable () -> Unit
 ) {
-    val colors = if (darkTheme) DarkColors else LightColors
-    MaterialTheme(colorScheme = colors, typography = AppTypography, content = content)
+    MaterialTheme(
+        colorScheme = if (darkTheme) DarkColors else LightColors,
+        typography = AppTypography,
+        content = content
+    )
 }

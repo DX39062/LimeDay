@@ -1,4 +1,4 @@
-package com.limeday.app.llm
+package com.limeday.app.sync
 
 import android.content.Context
 import android.security.keystore.KeyGenParameterSpec
@@ -12,41 +12,30 @@ import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
 import org.json.JSONObject
 
-class SecureLlmConfigStore(context: Context) {
+class SecureWebDavConfigStore(context: Context) {
     private val preferences = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
-    fun load(): LlmConfig {
-        val encrypted = preferences.getString(KEY_CONFIG, null) ?: return LlmConfig()
+    fun load(): WebDavConfig {
+        val encrypted = preferences.getString(KEY_CONFIG, null) ?: return WebDavConfig()
         return runCatching {
             val json = JSONObject(decrypt(encrypted))
-            val provider = runCatching {
-                LlmProvider.valueOf(json.getString("provider"))
-            }.getOrDefault(LlmProvider.OPENAI_COMPATIBLE)
-            LlmConfig(
-                provider = provider,
-                baseUrl = json.optString("baseUrl", provider.defaultBaseUrl),
-                model = json.optString("model", provider.defaultModel),
-                apiKey = json.optString("apiKey")
-            )
-        }.getOrElse {
-            preferences.edit { remove(KEY_CONFIG) }
-            LlmConfig()
-        }
+            WebDavConfig(
+                baseUrl = json.optString("baseUrl"),
+                username = json.optString("username"),
+                password = json.optString("password"),
+                directory = json.optString("directory", "LimeDay")
+            ).normalized
+        }.getOrElse { WebDavConfig() }
     }
 
-    fun save(config: LlmConfig) {
-        val normalized = config.copy(
-            baseUrl = config.baseUrl.trim().trimEnd('/'),
-            model = config.model.trim(),
-            apiKey = config.apiKey.trim()
-        )
+    fun save(config: WebDavConfig) {
+        val value = config.normalized
         val json = JSONObject()
-            .put("provider", normalized.provider.name)
-            .put("baseUrl", normalized.baseUrl)
-            .put("model", normalized.model)
-            .put("apiKey", normalized.apiKey)
-            .toString()
-        preferences.edit { putString(KEY_CONFIG, encrypt(json)) }
+            .put("baseUrl", value.baseUrl)
+            .put("username", value.username)
+            .put("password", value.password)
+            .put("directory", value.directory)
+        preferences.edit { putString(KEY_CONFIG, encrypt(json.toString())) }
     }
 
     fun clear() = preferences.edit { remove(KEY_CONFIG) }
@@ -63,8 +52,11 @@ class SecureLlmConfigStore(context: Context) {
         val parts = value.split(':', limit = 2)
         require(parts.size == 2)
         val cipher = Cipher.getInstance(TRANSFORMATION)
-        val iv = Base64.decode(parts[0], Base64.NO_WRAP)
-        cipher.init(Cipher.DECRYPT_MODE, getOrCreateKey(), GCMParameterSpec(128, iv))
+        cipher.init(
+            Cipher.DECRYPT_MODE,
+            getOrCreateKey(),
+            GCMParameterSpec(128, Base64.decode(parts[0], Base64.NO_WRAP))
+        )
         return cipher.doFinal(Base64.decode(parts[1], Base64.NO_WRAP)).toString(Charsets.UTF_8)
     }
 
@@ -85,9 +77,9 @@ class SecureLlmConfigStore(context: Context) {
     }
 
     companion object {
-        private const val PREFS_NAME = "llm_secure_config"
+        private const val PREFS_NAME = "webdav_secure_config"
         private const val KEY_CONFIG = "encrypted_config"
-        private const val KEY_ALIAS = "lime_day_llm_key_v1"
+        private const val KEY_ALIAS = "lime_day_webdav_key_v1"
         private const val TRANSFORMATION = "AES/GCM/NoPadding"
     }
 }

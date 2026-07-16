@@ -1,5 +1,6 @@
 *.iml
 .gradle
+.gradle-user
 /local.properties
 /.idea
 .DS_Store
@@ -12,3 +13,8 @@ app/build
 /.agents
 /.kotlin
 /dist
+/.dart_tool
+/.home
+/.flutter-plugins-dependencies
+/android
+/flutter_*.log

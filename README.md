@@ -1,39 +1,56 @@
 # 青柠日记
 
-一款清新的 Android 每日待办、复盘与智能总结应用。产品和技术规格见 [SPEC.md](SPEC.md)。
+青柠日记是一款原生 Android 每日待办与复盘应用。每日待办是主页核心，复盘通过独立二级页面进入，LLM 总结也只在复盘流程中提供。
+
+完整产品与技术规格见 [SPEC.md](SPEC.md)。
+
+## 下载
+
+- [LimeDay 2.1.0 ARM64 APK](releases/LimeDay-2.1.0-arm64-v8a.apk)
+- SHA-256：`21E54AC78589B864D1FA7CB9E1BCB97C8AC6D4E166643FBA69565709B6D0A26D`
+
+## 技术栈
+
+- Kotlin + Jetpack Compose + Material 3
+- Navigation Compose + ViewModel + StateFlow
+- Room/SQLite，本地优先并支持软删除与冲突合并
+- OkHttp，支持 WebDAV 与三类 BYOK 模型接口
+- WorkManager，执行有网络约束的后台 WebDAV 同步
+- Android Keystore AES/GCM，保存 WebDAV 密码和 LLM API Key
+
+## 当前能力
+
+- 日期切换、每日待办 CRUD、完成进度
+- 独立每日复盘页面和 500ms 自动保存
+- OpenAI 兼容、Anthropic、Google Gemini 总结
+- WebDAV 连接测试、首次建目录、双向合并和后台同步
+- Room v1/v2 与 Flutter/Drift v3 到 Room v4 的非破坏迁移
+- 浅色/深色模式、边到边布局和 TalkBack 语义
 
 ## 开发环境
 
-- Android Studio Meerkat（2024.3.1）或更高版本
 - JDK 17
 - Android SDK 36
-
-在 Android Studio 中打开项目，等待 Gradle 同步后运行 `app`。命令行环境安装 JDK 17 后可执行：
+- Android Build Tools 36.0.0
+- ARM64 Android 8.0（API 26）及以上设备
 
 ```shell
 ./gradlew testDebugUnitTest
-./gradlew assembleDebug
+./gradlew connectedDebugAndroidTest
+./gradlew lintDebug
+./gradlew assembleRelease
 ```
 
-当前工程面向 Android 16（API 36），最低支持 Android 8.0（API 26）。待办、复盘和总结通过 Room 保存在设备本地。
+release 构建仅生成 `arm64-v8a` APK：
 
-## 智能总结
-
-设置页面支持三类自带密钥（BYOK）接口：
-
-- OpenAI Chat Completions 兼容接口，可自定义 Base URL 和模型。
-- Anthropic Messages API。
-- Google Gemini GenerateContent API。
-
-API Key 使用 Android Keystore 的 AES/GCM 密钥加密，仅保存在设备本机。应用没有内置密钥；生成总结时，当前日期的待办与复盘内容会发送给用户选择的模型服务商。
-
-## 本地工具链构建
-
-仓库根目录的 `build-local.ps1` 会使用项目内 `.toolchain` 目录中的 JDK 与 Android SDK：
-
-```powershell
-.\build-local.ps1
+```text
+app/build/outputs/apk/release/app-arm64-v8a-release.apk
 ```
 
-成功后 APK 位于 `app/build/outputs/apk/debug/app-debug.apk`。
+当前仓库交付包使用 debug key 签名，仅用于开发测试。提交应用商店前必须配置长期保管的正式发布密钥。
 
+## WebDAV
+
+在设置页填写 HTTPS WebDAV 根地址、用户名、密码和远端目录。应用使用 `<目录>/limeday-sync-v1.json` 保存平台无关的完整数据快照。
+
+同步过程先下载远端快照，再按 `updatedAt`、`revision`、`deviceId` 合并，事务写入本地后上传合并结果。密码和 API Key 不进入数据库或同步文件。
