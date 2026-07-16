@@ -1,7 +1,7 @@
 # 青柠日记产品与技术规格说明书
 
 - 版本：2.0 Draft
-- 状态：Android 重构基线
+- 状态：Android 2.0 已实现
 - 当前目标平台：Android 8.0 及以上（API 26+）
 - 未来目标平台：Windows、macOS；多端同步
 

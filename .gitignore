@@ -9,6 +9,13 @@
 .cxx
 app/build
 .toolchain
+/.dart_tool
+/.home
+/.flutter-plugins-dependencies
+/.pub
+/.pub-cache
+flutter_*.log
+*.iml
 /.agents
 /.kotlin
 /dist
