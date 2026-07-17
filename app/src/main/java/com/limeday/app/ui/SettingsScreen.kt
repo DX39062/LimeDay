@@ -20,6 +20,7 @@ import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.Notifications
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Settings
+import androidx.compose.material.icons.rounded.Star
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
@@ -66,6 +67,7 @@ fun SettingsScreen(
     onRequestImport: () -> Unit,
     onClearDataMessage: () -> Unit,
     onOpenTrash: () -> Unit,
+    onOpenLlmProviders: () -> Unit,
     onOpenWebDav: () -> Unit
 ) {
     var timeDialog by remember { mutableStateOf<ReminderDialog?>(null) }
@@ -185,7 +187,7 @@ fun SettingsScreen(
             }
             item {
                 Text(
-                    "备份包含待办、复盘和总结，不包含密码、API Key 与本机设置。",
+                    "备份包含待办、复盘、每日总结和范围总结，不包含密码、端点、API Key 与本机设置。",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -196,6 +198,16 @@ fun SettingsScreen(
                     title = "回收站",
                     subtitle = if (state.deletedTodos.isEmpty()) "没有已删除待办" else "${state.deletedTodos.size} 项待办可恢复",
                     onClick = onOpenTrash
+                )
+            }
+
+            item { HorizontalDivider(Modifier.padding(vertical = 4.dp)) }
+            item {
+                SettingsNavigationRow(
+                    icon = Icons.Rounded.Star,
+                    title = "模型服务",
+                    subtitle = state.activeLlmProvider?.let { "${state.llmSettings.providers.size} 个供应商，默认 ${it.name}" } ?: "未配置",
+                    onClick = onOpenLlmProviders
                 )
             }
 
@@ -219,7 +231,7 @@ fun SettingsScreen(
             item {
                 val context = LocalContext.current
                 val version = remember {
-                    context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: "2.4.0"
+                    context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: "2.5.0"
                 }
                 Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text("青柠日记 $version", style = MaterialTheme.typography.titleMedium)
@@ -257,7 +269,7 @@ fun SettingsScreen(
             text = {
                 Text(
                     if (dialog == InfoDialog.Privacy) {
-                        "待办、复盘和总结默认保存在本机。WebDAV 同步仅在配置后运行；智能总结仅在你主动生成时发送当日内容。密码和 API Key 使用 Android Keystore 加密，不会进入备份或同步文件。"
+                        "待办、复盘和总结默认保存在本机。WebDAV 同步仅在配置后运行；智能总结仅在你主动生成时发送所选日期内容。密码、供应商端点和 API Key 使用 Android Keystore 加密，不会进入备份或同步文件。"
                     } else {
                         "本应用使用 Kotlin、Jetpack Compose、AndroidX、Room、WorkManager、OkHttp 和 org.json。各组件遵循其 Apache License 2.0 或对应开源许可证。"
                     }

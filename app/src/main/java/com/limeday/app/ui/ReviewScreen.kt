@@ -42,6 +42,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -50,7 +51,6 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import com.limeday.app.data.DailyReview
 import com.limeday.app.data.TodoItem
-import com.limeday.app.llm.LlmConfig
 import java.time.format.DateTimeFormatter
 import java.time.LocalDate
 import java.util.Locale
@@ -72,15 +72,18 @@ fun ReviewScreen(
     onDuplicateTodo: (TodoItem) -> Unit,
     onDeleteTodo: (TodoItem) -> Unit,
     onRestoreTodo: (TodoItem) -> Unit,
-    onSaveLlmConfig: (LlmConfig) -> Unit,
-    onClearLlmConfig: () -> Unit,
-    onGenerateSummary: () -> Unit,
+    onOpenLlmSettings: () -> Unit,
+    onGenerateSummary: (String, String?, String) -> Unit,
     onCancelSummary: () -> Unit,
-    onClearError: () -> Unit
+    onClearError: () -> Unit,
+    onToggleFavorite: (String) -> Unit
 ) {
-    var showLlmSettings by remember { mutableStateOf(false) }
     var editingTodo by remember { mutableStateOf<TodoItem?>(null) }
     var expandedTodoId by remember { mutableStateOf<String?>(null) }
+    var instruction by rememberSaveable { mutableStateOf("总结今日进展") }
+    var providerId by rememberSaveable { mutableStateOf(state.llmSettings.activeProvider?.id) }
+    val selectedProvider = state.llmSettings.providers.firstOrNull { it.id == providerId } ?: state.llmSettings.activeProvider
+    var model by rememberSaveable(selectedProvider?.id) { mutableStateOf(selectedProvider?.model.orEmpty()) }
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     val review = state.review
@@ -201,9 +204,19 @@ fun ReviewScreen(
                 item {
                     SummaryPanel(
                         state = state,
-                        onConfigure = { showLlmSettings = true },
+                        instruction = instruction,
+                        providerId = providerId,
+                        model = model,
+                        onInstructionChange = { instruction = it },
+                        onProviderSelected = {
+                            providerId = it.id
+                            model = it.model
+                        },
+                        onModelChange = { model = it },
+                        onConfigure = onOpenLlmSettings,
+                        onToggleFavorite = onToggleFavorite,
                         onGenerate = {
-                            if (state.llmConfig.isConfigured) onGenerateSummary() else showLlmSettings = true
+                            if (state.llmSettings.isConfigured) onGenerateSummary(instruction, providerId, model) else onOpenLlmSettings()
                         },
                         onCancel = onCancelSummary,
                         onClearError = onClearError
@@ -211,21 +224,6 @@ fun ReviewScreen(
                 }
             }
         }
-    }
-
-    if (showLlmSettings) {
-        LlmConfigDialog(
-            initialConfig = state.llmConfig,
-            onDismiss = { showLlmSettings = false },
-            onClear = {
-                onClearLlmConfig()
-                showLlmSettings = false
-            },
-            onSave = {
-                onSaveLlmConfig(it)
-                showLlmSettings = false
-            }
-        )
     }
 
     editingTodo?.let { todo ->
@@ -267,7 +265,14 @@ private fun ReviewField(
 @Composable
 private fun SummaryPanel(
     state: DayUiState,
+    instruction: String,
+    providerId: String?,
+    model: String,
+    onInstructionChange: (String) -> Unit,
+    onProviderSelected: (com.limeday.app.llm.LlmServiceConfig) -> Unit,
+    onModelChange: (String) -> Unit,
     onConfigure: () -> Unit,
+    onToggleFavorite: (String) -> Unit,
     onGenerate: () -> Unit,
     onCancel: () -> Unit,
     onClearError: () -> Unit
@@ -288,9 +293,19 @@ private fun SummaryPanel(
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Icon(Icons.Rounded.Lock, contentDescription = null, modifier = Modifier.size(16.dp))
                 Text(
-                    if (state.llmConfig.isConfigured) "使用 ${state.llmConfig.provider.displayName} · ${state.llmConfig.model}" else "尚未配置模型服务",
+                    state.activeLlmProvider?.let { "默认使用 ${it.name} · ${it.model}" } ?: "尚未配置模型服务",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSecondaryContainer
+                )
+            }
+            PromptEditor(state.llmSettings, instruction, onInstructionChange, onToggleFavorite)
+            if (state.llmSettings.providers.isNotEmpty()) {
+                ProviderOverrideFields(
+                    providers = state.llmSettings.providers,
+                    selectedProviderId = providerId ?: state.activeLlmProvider?.id,
+                    model = model,
+                    onProviderSelected = onProviderSelected,
+                    onModelChange = onModelChange
                 )
             }
             state.summary?.let {
@@ -318,7 +333,7 @@ private fun SummaryPanel(
                 }
             }
             Text(
-                "生成时，当日待办与复盘会发送给所选模型服务商。",
+                "生成时，当日待办与复盘会发送给本次选择的模型服务商。",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSecondaryContainer
             )

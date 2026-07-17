@@ -21,6 +21,9 @@ interface LimeDayDao {
     @Query("SELECT * FROM daily_summaries WHERE date = :date AND deleted_at IS NULL LIMIT 1")
     fun observeSummary(date: String): Flow<DailySummary?>
 
+    @Query("SELECT * FROM range_summaries WHERE deleted_at IS NULL ORDER BY generated_at DESC")
+    fun observeRangeSummaries(): Flow<List<RangeSummary>>
+
     @Query("SELECT * FROM todos")
     suspend fun allTodos(): List<TodoItem>
 
@@ -29,6 +32,18 @@ interface LimeDayDao {
 
     @Query("SELECT * FROM daily_summaries")
     suspend fun allSummaries(): List<DailySummary>
+
+    @Query("SELECT * FROM range_summaries")
+    suspend fun allRangeSummaries(): List<RangeSummary>
+
+    @Query("SELECT * FROM todos WHERE date >= :start AND date <= :end AND deleted_at IS NULL ORDER BY date ASC, is_completed ASC, sort_order ASC")
+    suspend fun todosBetween(start: String, end: String): List<TodoItem>
+
+    @Query("SELECT * FROM daily_reviews WHERE date >= :start AND date <= :end AND deleted_at IS NULL ORDER BY date ASC")
+    suspend fun reviewsBetween(start: String, end: String): List<DailyReview>
+
+    @Query("SELECT * FROM daily_summaries WHERE date >= :start AND date <= :end AND deleted_at IS NULL ORDER BY date ASC")
+    suspend fun summariesBetween(start: String, end: String): List<DailySummary>
 
     @Query("SELECT * FROM app_metadata WHERE id = 1 LIMIT 1")
     suspend fun metadata(): AppMetadata?
@@ -50,6 +65,12 @@ interface LimeDayDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertSummaries(summaries: List<DailySummary>)
+
+    @Upsert
+    suspend fun upsertRangeSummary(summary: RangeSummary)
+
+    @Upsert
+    suspend fun upsertRangeSummaries(summaries: List<RangeSummary>)
 
     @Upsert
     suspend fun upsertMetadata(metadata: AppMetadata)

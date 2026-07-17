@@ -79,11 +79,33 @@ data class DailySummary(
     @ColumnInfo(defaultValue = "1") override val revision: Long = 1
 ) : SyncEntity
 
+@Entity(
+    tableName = "range_summaries",
+    indices = [Index(value = ["range_start"], name = "range_summaries_start_idx")]
+)
+data class RangeSummary(
+    @PrimaryKey val id: String = UUID.randomUUID().toString(),
+    @ColumnInfo(name = "range_start") val rangeStart: String,
+    @ColumnInfo(name = "range_end") val rangeEnd: String,
+    @ColumnInfo(name = "period_type") val periodType: String,
+    val prompt: String,
+    val content: String,
+    @ColumnInfo(name = "provider_id") val providerId: String,
+    @ColumnInfo(name = "provider_name") val providerName: String,
+    val model: String,
+    @ColumnInfo(name = "include_existing_summaries", defaultValue = "0") val includeExistingSummaries: Boolean = false,
+    @ColumnInfo(name = "generated_at") val generatedAt: Long = System.currentTimeMillis(),
+    @ColumnInfo(name = "updated_at") override val updatedAt: Long = generatedAt,
+    @ColumnInfo(name = "deleted_at") override val deletedAt: Long? = null,
+    @ColumnInfo(name = "device_id") override val deviceId: String,
+    @ColumnInfo(defaultValue = "1") override val revision: Long = 1
+) : SyncEntity
+
 @Entity(tableName = "app_metadata")
 data class AppMetadata(
     @PrimaryKey @ColumnInfo(defaultValue = "1") val id: Int = 1,
     @ColumnInfo(name = "device_id") val deviceId: String,
-    @ColumnInfo(name = "schema_version_value") val schemaVersionValue: Int = 5,
+    @ColumnInfo(name = "schema_version_value") val schemaVersionValue: Int = 6,
     @ColumnInfo(name = "legacy_migration_version", defaultValue = "0") val legacyMigrationVersion: Int = 0,
     @ColumnInfo(name = "last_sync_at") val lastSyncAt: Long? = null,
     @ColumnInfo(name = "last_sync_status", defaultValue = "''") val lastSyncStatus: String = ""

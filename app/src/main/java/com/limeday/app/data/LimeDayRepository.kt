@@ -12,6 +12,7 @@ class LimeDayRepository(private val database: AppDatabase) {
     fun observeDeletedTodos(): Flow<List<TodoItem>> = dao.observeDeletedTodos()
     fun observeReview(date: String): Flow<DailyReview?> = dao.observeReview(date)
     fun observeSummary(date: String): Flow<DailySummary?> = dao.observeSummary(date)
+    fun observeRangeSummaries(): Flow<List<RangeSummary>> = dao.observeRangeSummaries()
 
     suspend fun deviceId(): String = ensureMetadata().deviceId
 
@@ -122,13 +123,65 @@ class LimeDayRepository(private val database: AppDatabase) {
         )
     }
 
+    suspend fun rangeData(start: String, end: String, includeExistingSummaries: Boolean): RangeSourceData =
+        database.withTransaction {
+            RangeSourceData(
+                todos = dao.todosBetween(start, end),
+                reviews = dao.reviewsBetween(start, end),
+                summaries = if (includeExistingSummaries) dao.summariesBetween(start, end) else emptyList()
+            )
+        }
+
+    suspend fun saveRangeSummary(
+        start: String,
+        end: String,
+        periodType: String,
+        prompt: String,
+        content: String,
+        providerId: String,
+        providerName: String,
+        model: String,
+        includeExistingSummaries: Boolean
+    ) {
+        val now = System.currentTimeMillis()
+        dao.upsertRangeSummary(
+            RangeSummary(
+                rangeStart = start,
+                rangeEnd = end,
+                periodType = periodType,
+                prompt = prompt,
+                content = content,
+                providerId = providerId,
+                providerName = providerName,
+                model = model,
+                includeExistingSummaries = includeExistingSummaries,
+                generatedAt = now,
+                updatedAt = now,
+                deviceId = deviceId()
+            )
+        )
+    }
+
+    suspend fun deleteRangeSummary(summary: RangeSummary) {
+        val now = System.currentTimeMillis()
+        dao.upsertRangeSummary(
+            summary.copy(
+                updatedAt = now,
+                deletedAt = now,
+                deviceId = deviceId(),
+                revision = summary.revision + 1
+            )
+        )
+    }
+
     suspend fun snapshot(): SyncSnapshot = database.withTransaction {
         SyncSnapshot(
             generatedAt = System.currentTimeMillis(),
             deviceId = deviceId(),
             todos = dao.allTodos(),
             reviews = dao.allReviews(),
-            summaries = dao.allSummaries()
+            summaries = dao.allSummaries(),
+            rangeSummaries = dao.allRangeSummaries()
         )
     }
 
@@ -138,12 +191,14 @@ class LimeDayRepository(private val database: AppDatabase) {
             deviceId = deviceId(),
             todos = dao.allTodos(),
             reviews = dao.allReviews(),
-            summaries = dao.allSummaries()
+            summaries = dao.allSummaries(),
+            rangeSummaries = dao.allRangeSummaries()
         )
         val merged = SyncSnapshot.merge(local, remote)
         dao.upsertTodos(merged.todos)
         dao.upsertReviews(merged.reviews)
         dao.upsertSummaries(merged.summaries)
+        dao.upsertRangeSummaries(merged.rangeSummaries)
         merged.copy(generatedAt = System.currentTimeMillis(), deviceId = deviceId())
     }
 
@@ -170,4 +225,12 @@ class LimeDayRepository(private val database: AppDatabase) {
         deviceId = deviceId(),
         revision = revision + 1
     )
+}
+
+data class RangeSourceData(
+    val todos: List<TodoItem>,
+    val reviews: List<DailyReview>,
+    val summaries: List<DailySummary>
+) {
+    val isEmpty: Boolean get() = todos.isEmpty() && reviews.none(DailyReview::hasContent) && summaries.isEmpty()
 }

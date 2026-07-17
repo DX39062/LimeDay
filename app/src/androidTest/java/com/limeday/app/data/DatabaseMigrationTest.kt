@@ -71,6 +71,16 @@ class DatabaseMigrationTest {
         database.close()
     }
 
+    @Test
+    fun roomV5AddsRangeSummaryTableWithoutChangingExistingData() = runBlocking {
+        val database = openMigratedDatabase(version = 5)
+
+        assertEquals("v5-id", database.limeDayDao().allTodos().single().id)
+        assertTrue(database.limeDayDao().allRangeSummaries().isEmpty())
+        assertEquals(6, database.limeDayDao().metadata()?.schemaVersionValue)
+        database.close()
+    }
+
     private fun openMigratedDatabase(version: Int): AppDatabase {
         val name = "migration-$version-${System.nanoTime()}.db"
         databaseNames += name
@@ -80,13 +90,15 @@ class DatabaseMigrationTest {
             1, 2 -> createRoomLegacy(file, version)
             3 -> createDriftV3(file)
             4 -> createRoomV4(file)
+            5 -> createRoomV5(file)
         }
         return Room.databaseBuilder(context, AppDatabase::class.java, name)
             .addMigrations(
                 AppDatabase.MIGRATION_1_4,
                 AppDatabase.MIGRATION_2_4,
                 AppDatabase.MIGRATION_3_4,
-                AppDatabase.MIGRATION_4_5
+                AppDatabase.MIGRATION_4_5,
+                AppDatabase.MIGRATION_5_6
             )
             .build()
             .also { it.openHelper.writableDatabase }
@@ -136,6 +148,21 @@ class DatabaseMigrationTest {
             db.execSQL("INSERT INTO todos VALUES ('v4-id', '2026-07-17', 'V4 待办', '', 0, '1', 1000, 1000, NULL, 'v4-device', 1)")
             db.execSQL("INSERT INTO app_metadata VALUES (1, 'v4-device', 4, 0, NULL, '')")
             db.version = 4
+        }
+    }
+
+    private fun createRoomV5(file: File) {
+        SQLiteDatabase.openOrCreateDatabase(file, null).use { db ->
+            db.execSQL("CREATE TABLE todos (id TEXT NOT NULL PRIMARY KEY, date TEXT NOT NULL, title TEXT NOT NULL, note TEXT NOT NULL DEFAULT '', is_completed INTEGER NOT NULL DEFAULT 0, priority INTEGER NOT NULL DEFAULT 1, sort_order TEXT NOT NULL, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, deleted_at INTEGER, device_id TEXT NOT NULL, revision INTEGER NOT NULL DEFAULT 1)")
+            db.execSQL("CREATE INDEX todos_date_idx ON todos(date)")
+            db.execSQL("CREATE TABLE daily_reviews (id TEXT NOT NULL PRIMARY KEY, date TEXT NOT NULL, highlight TEXT NOT NULL DEFAULT '', challenge TEXT NOT NULL DEFAULT '', learning TEXT NOT NULL DEFAULT '', tomorrow_focus TEXT NOT NULL DEFAULT '', mood INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, deleted_at INTEGER, device_id TEXT NOT NULL, revision INTEGER NOT NULL DEFAULT 1)")
+            db.execSQL("CREATE UNIQUE INDEX reviews_date_idx ON daily_reviews(date)")
+            db.execSQL("CREATE TABLE daily_summaries (id TEXT NOT NULL PRIMARY KEY, date TEXT NOT NULL, content TEXT NOT NULL, provider TEXT NOT NULL, model TEXT NOT NULL, generated_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, deleted_at INTEGER, device_id TEXT NOT NULL, revision INTEGER NOT NULL DEFAULT 1)")
+            db.execSQL("CREATE UNIQUE INDEX summaries_date_idx ON daily_summaries(date)")
+            db.execSQL("CREATE TABLE app_metadata (id INTEGER NOT NULL PRIMARY KEY DEFAULT 1, device_id TEXT NOT NULL, schema_version_value INTEGER NOT NULL, legacy_migration_version INTEGER NOT NULL DEFAULT 0, last_sync_at INTEGER, last_sync_status TEXT NOT NULL DEFAULT '')")
+            db.execSQL("INSERT INTO todos VALUES ('v5-id', '2026-07-17', 'V5 待办', '', 0, 1, '1', 1000, 1000, NULL, 'v5-device', 1)")
+            db.execSQL("INSERT INTO app_metadata VALUES (1, 'v5-device', 5, 0, NULL, '')")
+            db.version = 5
         }
     }
 }

@@ -44,6 +44,25 @@ class NavigationUiTest {
     }
 
     @Test
+    fun summaryIsASeparatePrimaryScreen() {
+        composeRule.onNodeWithText("总结").performClick()
+
+        composeRule.onNodeWithTag("summary_screen").assertExists()
+        composeRule.onNodeWithText("本周").assertExists()
+        composeRule.onNodeWithText("总结历史").assertExists()
+    }
+
+    @Test
+    fun modelProvidersAreManagedOnASecondLevelScreen() {
+        composeRule.onNodeWithContentDescription("设置").performClick()
+        composeRule.onNodeWithTag("settings_screen").performScrollToNode(hasText("模型服务"))
+        composeRule.onNodeWithText("模型服务").performClick()
+
+        composeRule.onNodeWithTag("llm_provider_screen").assertExists()
+        composeRule.onNodeWithText("API Key", substring = true).assertExists()
+    }
+
+    @Test
     fun webDavConfigurationIsASecondLevelScreen() {
         composeRule.onNodeWithContentDescription("设置").performClick()
         composeRule.onNodeWithTag("settings_screen").performScrollToNode(hasText("WebDAV 同步"))

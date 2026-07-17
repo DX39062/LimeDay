@@ -9,8 +9,8 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 import java.util.UUID
 
 @Database(
-    entities = [TodoItem::class, DailyReview::class, DailySummary::class, AppMetadata::class],
-    version = 5,
+    entities = [TodoItem::class, DailyReview::class, DailySummary::class, RangeSummary::class, AppMetadata::class],
+    version = 6,
     exportSchema = true
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -24,7 +24,7 @@ abstract class AppDatabase : RoomDatabase() {
                 context.applicationContext,
                 AppDatabase::class.java,
                 "lime_day.db"
-            ).addMigrations(MIGRATION_1_4, MIGRATION_2_4, MIGRATION_3_4, MIGRATION_4_5)
+            ).addMigrations(MIGRATION_1_4, MIGRATION_2_4, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
                 .addCallback(object : Callback() {
                     override fun onCreate(db: SupportSQLiteDatabase) {
                         super.onCreate(db)
@@ -51,6 +51,33 @@ abstract class AppDatabase : RoomDatabase() {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE todos ADD COLUMN priority INTEGER NOT NULL DEFAULT 1")
                 db.execSQL("UPDATE app_metadata SET schema_version_value = 5 WHERE id = 1")
+            }
+        }
+
+        internal val MIGRATION_5_6 = object : Migration(5, 6) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """CREATE TABLE IF NOT EXISTS range_summaries (
+                        id TEXT NOT NULL,
+                        range_start TEXT NOT NULL,
+                        range_end TEXT NOT NULL,
+                        period_type TEXT NOT NULL,
+                        prompt TEXT NOT NULL,
+                        content TEXT NOT NULL,
+                        provider_id TEXT NOT NULL,
+                        provider_name TEXT NOT NULL,
+                        model TEXT NOT NULL,
+                        include_existing_summaries INTEGER NOT NULL DEFAULT 0,
+                        generated_at INTEGER NOT NULL,
+                        updated_at INTEGER NOT NULL,
+                        deleted_at INTEGER,
+                        device_id TEXT NOT NULL,
+                        revision INTEGER NOT NULL DEFAULT 1,
+                        PRIMARY KEY(id)
+                    )""".trimIndent()
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS range_summaries_start_idx ON range_summaries(range_start)")
+                db.execSQL("UPDATE app_metadata SET schema_version_value = 6 WHERE id = 1")
             }
         }
 
@@ -125,7 +152,7 @@ abstract class AppDatabase : RoomDatabase() {
             db: SupportSQLiteDatabase,
             deviceId: String = UUID.randomUUID().toString(),
             legacyVersion: Int,
-            schemaVersion: Int = 5
+            schemaVersion: Int = 6
         ) {
             db.execSQL(
                 "INSERT OR IGNORE INTO app_metadata (id, device_id, schema_version_value, legacy_migration_version, last_sync_status) VALUES (1, ?, ?, ?, '')",

@@ -3,6 +3,7 @@ package com.limeday.app.sync
 import com.limeday.app.data.DailyReview
 import com.limeday.app.data.TodoItem
 import com.limeday.app.data.TodoPriority
+import com.limeday.app.data.RangeSummary
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
@@ -36,6 +37,30 @@ class SyncSnapshotTest {
         val decoded = SyncSnapshot.fromJson(json.toString())
 
         assertEquals(TodoPriority.NORMAL, decoded.todos.single().priority)
+    }
+
+    @Test
+    fun `legacy snapshot without range summaries defaults to empty`() {
+        val json = JSONObject(snapshot().toJson()).apply { remove("rangeSummaries") }
+
+        val decoded = SyncSnapshot.fromJson(json.toString())
+
+        assertTrue(decoded.rangeSummaries.isEmpty())
+    }
+
+    @Test
+    fun `range summary round trip and merge use stable id`() {
+        val local = snapshot(rangeSummaries = listOf(rangeSummary(content = "本地", updatedAt = 100)))
+        val remote = snapshot(
+            deviceId = "device-b",
+            rangeSummaries = listOf(rangeSummary(content = "远端", updatedAt = 200, deviceId = "device-b"))
+        )
+
+        val decoded = SyncSnapshot.fromJson(local.toJson())
+        val merged = SyncSnapshot.merge(local, remote)
+
+        assertEquals("本地", decoded.rangeSummaries.single().content)
+        assertEquals("远端", merged.rangeSummaries.single().content)
     }
 
     @Test
@@ -104,13 +129,15 @@ class SyncSnapshotTest {
     private fun snapshot(
         deviceId: String = "device-a",
         todos: List<TodoItem> = emptyList(),
-        reviews: List<DailyReview> = emptyList()
+        reviews: List<DailyReview> = emptyList(),
+        rangeSummaries: List<RangeSummary> = emptyList()
     ) = SyncSnapshot(
         generatedAt = 100,
         deviceId = deviceId,
         todos = todos,
         reviews = reviews,
-        summaries = emptyList()
+        summaries = emptyList(),
+        rangeSummaries = rangeSummaries
     )
 
     private fun todo(
@@ -142,6 +169,25 @@ class SyncSnapshotTest {
         date = "2026-07-16",
         highlight = highlight,
         createdAt = 1,
+        updatedAt = updatedAt,
+        deviceId = deviceId
+    )
+
+    private fun rangeSummary(
+        content: String,
+        updatedAt: Long,
+        deviceId: String = "device-a"
+    ) = RangeSummary(
+        id = "range-1",
+        rangeStart = "2026-07-01",
+        rangeEnd = "2026-07-07",
+        periodType = "week",
+        prompt = "总结本周",
+        content = content,
+        providerId = "provider-1",
+        providerName = "供应商",
+        model = "model",
+        generatedAt = updatedAt,
         updatedAt = updatedAt,
         deviceId = deviceId
     )

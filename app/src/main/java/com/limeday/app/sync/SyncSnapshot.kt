@@ -2,6 +2,7 @@ package com.limeday.app.sync
 
 import com.limeday.app.data.DailyReview
 import com.limeday.app.data.DailySummary
+import com.limeday.app.data.RangeSummary
 import com.limeday.app.data.SyncEntity
 import com.limeday.app.data.TodoItem
 import com.limeday.app.data.TodoPriority
@@ -14,7 +15,8 @@ data class SyncSnapshot(
     val deviceId: String,
     val todos: List<TodoItem>,
     val reviews: List<DailyReview>,
-    val summaries: List<DailySummary>
+    val summaries: List<DailySummary>,
+    val rangeSummaries: List<RangeSummary> = emptyList()
 ) {
     fun toJson(): String = JSONObject()
         .put("formatVersion", formatVersion)
@@ -23,6 +25,7 @@ data class SyncSnapshot(
         .put("todos", JSONArray().apply { todos.forEach { put(it.toJson()) } })
         .put("reviews", JSONArray().apply { reviews.forEach { put(it.toJson()) } })
         .put("summaries", JSONArray().apply { summaries.forEach { put(it.toJson()) } })
+        .put("rangeSummaries", JSONArray().apply { rangeSummaries.forEach { put(it.toJson()) } })
         .toString()
 
     companion object {
@@ -38,7 +41,8 @@ data class SyncSnapshot(
                 deviceId = json.optString("deviceId"),
                 todos = json.getJSONArray("todos").mapObjects(::todoFromJson),
                 reviews = json.getJSONArray("reviews").mapObjects(::reviewFromJson),
-                summaries = json.getJSONArray("summaries").mapObjects(::summaryFromJson)
+                summaries = json.getJSONArray("summaries").mapObjects(::summaryFromJson),
+                rangeSummaries = json.optJSONArray("rangeSummaries")?.mapObjects(::rangeSummaryFromJson).orEmpty()
             )
         }
 
@@ -47,7 +51,8 @@ data class SyncSnapshot(
             deviceId = local.deviceId,
             todos = mergeBy(local.todos, remote.todos) { it.id },
             reviews = mergeBy(local.reviews, remote.reviews) { it.date },
-            summaries = mergeBy(local.summaries, remote.summaries) { it.date }
+            summaries = mergeBy(local.summaries, remote.summaries) { it.date },
+            rangeSummaries = mergeBy(local.rangeSummaries, remote.rangeSummaries) { it.id }
         )
 
         private fun <T : SyncEntity> mergeBy(
@@ -113,6 +118,24 @@ data class SyncSnapshot(
             deviceId = json.getString("deviceId"),
             revision = json.getLong("revision")
         )
+
+        private fun rangeSummaryFromJson(json: JSONObject) = RangeSummary(
+            id = json.getString("id"),
+            rangeStart = json.getString("rangeStart"),
+            rangeEnd = json.getString("rangeEnd"),
+            periodType = json.getString("periodType"),
+            prompt = json.getString("prompt"),
+            content = json.getString("content"),
+            providerId = json.optString("providerId"),
+            providerName = json.getString("providerName"),
+            model = json.getString("model"),
+            includeExistingSummaries = json.optBoolean("includeExistingSummaries"),
+            generatedAt = json.getLong("generatedAt"),
+            updatedAt = json.getLong("updatedAt"),
+            deletedAt = json.nullableLong("deletedAt"),
+            deviceId = json.getString("deviceId"),
+            revision = json.getLong("revision")
+        )
     }
 }
 
@@ -132,6 +155,12 @@ private fun DailySummary.toJson() = JSONObject()
     .put("id", id).put("date", date).put("content", content).put("provider", provider)
     .put("model", model).put("generatedAt", generatedAt).put("updatedAt", updatedAt)
     .putNullable("deletedAt", deletedAt).put("deviceId", deviceId).put("revision", revision)
+
+private fun RangeSummary.toJson() = JSONObject()
+    .put("id", id).put("rangeStart", rangeStart).put("rangeEnd", rangeEnd).put("periodType", periodType)
+    .put("prompt", prompt).put("content", content).put("providerId", providerId).put("providerName", providerName)
+    .put("model", model).put("includeExistingSummaries", includeExistingSummaries).put("generatedAt", generatedAt)
+    .put("updatedAt", updatedAt).putNullable("deletedAt", deletedAt).put("deviceId", deviceId).put("revision", revision)
 
 private fun JSONObject.putNullable(key: String, value: Long?): JSONObject = put(key, value ?: JSONObject.NULL)
 
