@@ -10,12 +10,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.ArrowForward
 import androidx.compose.material.icons.rounded.Check
-import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.DateRange
 import androidx.compose.material.icons.rounded.Info
@@ -23,15 +21,12 @@ import androidx.compose.material.icons.rounded.Notifications
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
@@ -53,14 +48,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import com.limeday.app.settings.ThemeMode
-import com.limeday.app.sync.WebDavConfig
-import java.time.Instant
-import java.time.ZoneId
-import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -68,10 +57,6 @@ import java.util.Locale
 fun SettingsScreen(
     state: DayUiState,
     onBack: () -> Unit,
-    onSave: (WebDavConfig) -> Unit,
-    onClear: () -> Unit,
-    onTest: (WebDavConfig) -> Unit,
-    onSync: (WebDavConfig) -> Unit,
     notificationPermissionGranted: Boolean,
     onRequestNotificationPermission: () -> Unit,
     onSetThemeMode: (ThemeMode) -> Unit,
@@ -79,9 +64,10 @@ fun SettingsScreen(
     onSetReviewReminder: (Boolean, Int, Int) -> Unit,
     onRequestExport: () -> Unit,
     onRequestImport: () -> Unit,
-    onClearDataMessage: () -> Unit
+    onClearDataMessage: () -> Unit,
+    onOpenTrash: () -> Unit,
+    onOpenWebDav: () -> Unit
 ) {
-    var draft by remember(state.webDavConfig) { mutableStateOf(state.webDavConfig) }
     var timeDialog by remember { mutableStateOf<ReminderDialog?>(null) }
     var infoDialog by remember { mutableStateOf<InfoDialog?>(null) }
     val settings = state.appSettings
@@ -204,96 +190,28 @@ fun SettingsScreen(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
+            item {
+                SettingsNavigationRow(
+                    icon = Icons.Rounded.Delete,
+                    title = "回收站",
+                    subtitle = if (state.deletedTodos.isEmpty()) "没有已删除待办" else "${state.deletedTodos.size} 项待办可恢复",
+                    onClick = onOpenTrash
+                )
+            }
 
             item { HorizontalDivider(Modifier.padding(vertical = 4.dp)) }
             item {
-                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text("WebDAV 同步", style = MaterialTheme.typography.headlineSmall)
-                    Text("本地数据保持可用，同步会合并两端较新的记录。", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-            }
-            item {
-                OutlinedTextField(
-                    value = draft.baseUrl,
-                    onValueChange = { draft = draft.copy(baseUrl = it) },
-                    modifier = Modifier.fillMaxWidth(),
-                    label = { Text("WebDAV 根地址") },
-                    placeholder = { Text("https://dav.example.com/remote.php/dav/files/user") },
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
-                    shape = RoundedCornerShape(12.dp)
+                SettingsNavigationRow(
+                    icon = Icons.Rounded.Refresh,
+                    title = "WebDAV 同步",
+                    subtitle = when {
+                        state.isSyncing -> "正在同步"
+                        state.webDavConfig.isConfigured && state.metadata?.lastSyncAt != null -> "已配置，最近同步 ${formatSettingsTime(state.metadata.lastSyncAt)}"
+                        state.webDavConfig.isConfigured -> "已配置"
+                        else -> "未配置"
+                    },
+                    onClick = onOpenWebDav
                 )
-            }
-            item {
-                OutlinedTextField(
-                    value = draft.username,
-                    onValueChange = { draft = draft.copy(username = it) },
-                    modifier = Modifier.fillMaxWidth(),
-                    label = { Text("用户名") },
-                    singleLine = true,
-                    shape = RoundedCornerShape(12.dp)
-                )
-            }
-            item {
-                OutlinedTextField(
-                    value = draft.password,
-                    onValueChange = { draft = draft.copy(password = it) },
-                    modifier = Modifier.fillMaxWidth(),
-                    label = { Text("密码或应用专用密码") },
-                    singleLine = true,
-                    visualTransformation = PasswordVisualTransformation(),
-                    shape = RoundedCornerShape(12.dp)
-                )
-            }
-            item {
-                OutlinedTextField(
-                    value = draft.directory,
-                    onValueChange = { draft = draft.copy(directory = it) },
-                    modifier = Modifier.fillMaxWidth(),
-                    label = { Text("远端目录") },
-                    singleLine = true,
-                    shape = RoundedCornerShape(12.dp)
-                )
-            }
-            item {
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    OutlinedButton(onClick = { onTest(draft) }, modifier = Modifier.weight(1f), enabled = !state.isTestingWebDav) {
-                        if (state.isTestingWebDav) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
-                        else Icon(Icons.Rounded.CheckCircle, contentDescription = null)
-                        Text("测试", modifier = Modifier.padding(start = 8.dp))
-                    }
-                    Button(onClick = { onSave(draft) }, modifier = Modifier.weight(1f)) {
-                        Icon(Icons.Rounded.Check, contentDescription = null)
-                        Text("保存", modifier = Modifier.padding(start = 8.dp))
-                    }
-                }
-            }
-            item {
-                Button(onClick = { onSync(draft) }, modifier = Modifier.fillMaxWidth(), enabled = !state.isSyncing) {
-                    if (state.isSyncing) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
-                    else Icon(Icons.Rounded.Refresh, contentDescription = null)
-                    Text(if (state.isSyncing) "正在同步" else "立即同步", modifier = Modifier.padding(start = 8.dp))
-                }
-            }
-            state.syncMessage?.let { message ->
-                item {
-                    Surface(shape = RoundedCornerShape(8.dp), color = MaterialTheme.colorScheme.surfaceContainer) {
-                        Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                            Text(message, style = MaterialTheme.typography.bodyLarge)
-                            state.metadata?.lastSyncAt?.let {
-                                Text("最近记录：${formatTime(it)}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            }
-                        }
-                    }
-                }
-            }
-            if (state.webDavConfig.isConfigured) {
-                item {
-                    TextButton(onClick = onClear, modifier = Modifier.fillMaxWidth()) {
-                        Icon(Icons.Rounded.Delete, contentDescription = null)
-                        Text("清除 WebDAV 配置", modifier = Modifier.padding(start = 8.dp))
-                    }
-                }
             }
 
             item { HorizontalDivider(Modifier.padding(vertical = 4.dp)) }
@@ -301,7 +219,7 @@ fun SettingsScreen(
             item {
                 val context = LocalContext.current
                 val version = remember {
-                    context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: "2.2.0"
+                    context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: "2.3.0"
                 }
                 Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text("青柠日记 $version", style = MaterialTheme.typography.titleMedium)
@@ -359,6 +277,29 @@ private fun SectionTitle(icon: androidx.compose.ui.graphics.vector.ImageVector, 
 }
 
 @Composable
+private fun SettingsNavigationRow(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    title: String,
+    subtitle: String,
+    onClick: () -> Unit
+) {
+    Surface(onClick = onClick, modifier = Modifier.fillMaxWidth(), color = MaterialTheme.colorScheme.surfaceContainer, shape = RoundedCornerShape(8.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(title, style = MaterialTheme.typography.titleMedium)
+                Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            Icon(Icons.AutoMirrored.Rounded.ArrowForward, contentDescription = null)
+        }
+    }
+}
+
+@Composable
 private fun ReminderRow(
     title: String,
     enabled: Boolean,
@@ -411,5 +352,5 @@ private enum class InfoDialog { Privacy, Licenses }
 
 private fun formatReminderTime(hour: Int, minute: Int): String = String.format(Locale.getDefault(), "%02d:%02d", hour, minute)
 
-private fun formatTime(value: Long): String = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")
-    .format(Instant.ofEpochMilli(value).atZone(ZoneId.systemDefault()))
+private fun formatSettingsTime(value: Long): String = java.time.format.DateTimeFormatter.ofPattern("MM-dd HH:mm")
+    .format(java.time.Instant.ofEpochMilli(value).atZone(java.time.ZoneId.systemDefault()))

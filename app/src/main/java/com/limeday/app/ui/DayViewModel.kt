@@ -40,6 +40,7 @@ import kotlinx.coroutines.withContext
 data class DayUiState(
     val selectedDate: LocalDate = LocalDate.now(),
     val todos: List<TodoItem> = emptyList(),
+    val deletedTodos: List<TodoItem> = emptyList(),
     val review: DailyReview? = null,
     val summary: DailySummary? = null,
     val llmConfig: LlmConfig = LlmConfig(),
@@ -89,6 +90,7 @@ class DayViewModel(
     private val todos = selectedDate.flatMapLatest { repository.observeTodos(it.toString()) }
     private val storedReview = selectedDate.flatMapLatest { repository.observeReview(it.toString()) }
     private val storedSummary = selectedDate.flatMapLatest { repository.observeSummary(it.toString()) }
+    private val deletedTodos = repository.observeDeletedTodos()
 
     private val dayContent = combine(selectedDate, todos, storedReview, reviewDraft) { date, items, stored, draft ->
         DayUiState(
@@ -112,9 +114,11 @@ class DayViewModel(
     private val contentState = combine(
         dayContent,
         storedSummary,
-        serviceState
-    ) { day, summary, services ->
+        serviceState,
+        deletedTodos
+    ) { day, summary, services, deleted ->
         day.copy(
+            deletedTodos = deleted,
             summary = summary,
             llmConfig = services.llmConfig,
             isGeneratingSummary = services.isGenerating,
@@ -259,7 +263,7 @@ class DayViewModel(
         val current = reviewDraft.value ?: return
         val transformed = transform(current)
         reviewDraft.value = transformed.copy(
-            highlight = transformed.highlight.take(1000),
+            highlight = transformed.highlight.take(3200),
             challenge = transformed.challenge.take(1000),
             learning = transformed.learning.take(1000),
             tomorrowFocus = transformed.tomorrowFocus.take(1000),
@@ -412,11 +416,8 @@ class DayViewModel(
         if (state.todos.isEmpty()) appendLine("（无）")
         state.todos.forEach { appendLine("- [${if (it.isCompleted) "已完成" else "未完成"}] ${it.title}") }
         appendLine("复盘记录：")
-        appendLine("今日亮点：${review?.highlight?.ifBlank { "（未填写）" } ?: "（未填写）"}")
-        appendLine("困难：${review?.challenge?.ifBlank { "（未填写）" } ?: "（未填写）"}")
-        appendLine("收获：${review?.learning?.ifBlank { "（未填写）" } ?: "（未填写）"}")
-        appendLine("明日重点：${review?.tomorrowFocus?.ifBlank { "（未填写）" } ?: "（未填写）"}")
-        appendLine("心情评分：${review?.mood?.takeIf { it > 0 }?.let { "$it/5" } ?: "未选择"}")
+        appendLine("解决了什么问题：${review?.challenge?.ifBlank { "（未填写）" } ?: "（未填写）"}")
+        appendLine("随便写写：${review?.freeWriteText()?.ifBlank { "（未填写）" } ?: "（未填写）"}")
     }
 
     private data class ServiceState(
@@ -436,6 +437,21 @@ class DayViewModel(
         private const val MAX_BACKUP_BYTES = 10_000_000
     }
 }
+
+fun DailyReview.freeWriteText(): String {
+    if (learning.isBlank() && tomorrowFocus.isBlank()) return highlight
+    return buildList {
+        if (highlight.isNotBlank()) add("今日亮点：$highlight")
+        if (learning.isNotBlank()) add("今日收获：$learning")
+        if (tomorrowFocus.isNotBlank()) add("明日重点：$tomorrowFocus")
+    }.joinToString("\n\n")
+}
+
+fun DailyReview.withFreeWrite(value: String): DailyReview = copy(
+    highlight = value,
+    learning = "",
+    tomorrowFocus = ""
+)
 
 class DayViewModelFactory(
     private val repository: LimeDayRepository,

@@ -42,8 +42,6 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SnackbarHost
-import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -53,7 +51,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -72,7 +69,6 @@ import com.limeday.app.data.TodoItem
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.util.Locale
-import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -85,17 +81,10 @@ fun DayScreen(
     onToggleTodo: (TodoItem) -> Unit,
     onUpdateTodo: (TodoItem, String, String) -> Unit,
     onDeleteTodo: (TodoItem) -> Unit,
-    onRestoreTodo: (TodoItem) -> Unit,
     onOpenReview: () -> Unit,
     onOpenSettings: () -> Unit
 ) {
     var editingTodo by remember { mutableStateOf<TodoItem?>(null) }
-    val snackbarHostState = remember { SnackbarHostState() }
-    val scope = rememberCoroutineScope()
-    val deleteWithUndo: (TodoItem) -> Unit = { todo ->
-        onDeleteTodo(todo)
-        scope.launch { snackbarHostState.showTodoDeleted(todo, onRestoreTodo) }
-    }
 
     Scaffold(
         topBar = {
@@ -114,7 +103,6 @@ fun DayScreen(
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background)
             )
         },
-        snackbarHost = { SnackbarHost(snackbarHostState) },
         containerColor = MaterialTheme.colorScheme.background
     ) { innerPadding ->
         if (state.isLoading) {
@@ -138,7 +126,7 @@ fun DayScreen(
                             todo = todo,
                             onToggle = { onToggleTodo(todo) },
                             onEdit = { editingTodo = todo },
-                            onDelete = { deleteWithUndo(todo) }
+                            onDelete = { onDeleteTodo(todo) }
                         )
                     }
                 }
@@ -156,7 +144,7 @@ fun DayScreen(
                 editingTodo = null
             },
             onDelete = {
-                deleteWithUndo(todo)
+                onDeleteTodo(todo)
                 editingTodo = null
             }
         )

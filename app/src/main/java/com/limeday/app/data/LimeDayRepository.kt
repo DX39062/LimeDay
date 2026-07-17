@@ -9,6 +9,7 @@ class LimeDayRepository(private val database: AppDatabase) {
     private val dao = database.limeDayDao()
 
     fun observeTodos(date: String): Flow<List<TodoItem>> = dao.observeTodos(date)
+    fun observeDeletedTodos(): Flow<List<TodoItem>> = dao.observeDeletedTodos()
     fun observeReview(date: String): Flow<DailyReview?> = dao.observeReview(date)
     fun observeSummary(date: String): Flow<DailySummary?> = dao.observeSummary(date)
 
@@ -56,7 +57,7 @@ class LimeDayRepository(private val database: AppDatabase) {
                 updatedAt = now,
                 deletedAt = null,
                 deviceId = deviceId(),
-                revision = todo.revision + 2
+                revision = todo.revision + 1
             )
         )
     }

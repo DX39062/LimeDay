@@ -16,8 +16,8 @@ android {
         applicationId = "com.limeday.app"
         minSdk = 26
         targetSdk = 36
-        versionCode = 2200
-        versionName = "2.2.0"
+        versionCode = 2300
+        versionName = "2.3.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables.useSupportLibrary = true

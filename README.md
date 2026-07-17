@@ -6,8 +6,8 @@
 
 ## 下载
 
-- [LimeDay 2.2.0 ARM64 APK](releases/LimeDay-2.2.0-arm64-v8a.apk)
-- SHA-256：`E04DAA04C83A4F0F1166305CB0155E6B8C8AF76B3C0E11E6629B82B76630C4D5`
+- [LimeDay 2.3.0 ARM64 APK](releases/LimeDay-2.3.0-arm64-v8a.apk)
+- SHA-256：`43D6C92A4847CB6A4AFC077FA8CB755BA83CCB665FBD41932100EB772B060551`
 
 ## 技术栈
 
@@ -21,12 +21,13 @@
 ## 当前能力
 
 - 日期切换、每日待办 CRUD、完成进度
-- 独立每日复盘页面、当日待办操作和 500ms 自动保存
-- 待办左滑删除、5 秒撤销及无障碍删除入口
+- 双字段每日复盘、旧复盘无损合并、当日待办操作和 500ms 自动保存
+- 待办滑动二次操作、回收站恢复及同步墓碑
 - 跟随系统/浅色/深色外观模式和每日待办、复盘提醒
 - JSON 数据导入导出、版本信息和隐私说明
 - OpenAI 兼容、Anthropic、Google Gemini 总结
 - WebDAV 连接测试、首次建目录、双向合并和后台同步
+- WebDAV 独立二级设置页
 - Room v1/v2 与 Flutter/Drift v3 到 Room v4 的非破坏迁移
 - 浅色/深色模式、边到边布局和 TalkBack 语义
 
@@ -54,6 +55,6 @@ app/build/outputs/apk/release/app-arm64-v8a-release.apk
 
 ## WebDAV
 
-在设置页填写 HTTPS WebDAV 根地址、用户名、密码和远端目录。应用使用 `<目录>/limeday-sync-v1.json` 保存平台无关的完整数据快照。
+从设置页进入 WebDAV 二级页面，填写 HTTPS WebDAV 根地址、用户名、密码和远端目录。应用使用 `<目录>/limeday-sync-v1.json` 保存平台无关的完整数据快照。
 
 同步过程先下载远端快照，再按 `updatedAt`、`revision`、`deviceId` 合并，事务写入本地后上传合并结果。密码和 API Key 不进入数据库或同步文件。

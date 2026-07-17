@@ -1,9 +1,11 @@
 package com.limeday.app.ui
 
 import androidx.compose.ui.test.hasTestTag
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollToNode
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -26,6 +28,9 @@ class NavigationUiTest {
 
         composeRule.onNodeWithTag("review_screen").assertExists()
         composeRule.onNodeWithTag("review_todos").assertExists()
+        composeRule.onNodeWithText("解决了什么问题？").assertExists()
+        composeRule.onNodeWithText("随便写写").assertExists()
+        composeRule.onNodeWithText("今天有什么收获？").assertDoesNotExist()
         composeRule.onNodeWithTag("review_screen").performScrollToNode(hasTestTag("summary_panel"))
         composeRule.onNodeWithTag("summary_panel", useUnmergedTree = true).assertExists()
     }
@@ -35,5 +40,25 @@ class NavigationUiTest {
         composeRule.onNodeWithContentDescription("设置").performClick()
 
         composeRule.onNodeWithTag("settings_screen").assertExists()
+        composeRule.onNodeWithText("WebDAV 根地址").assertDoesNotExist()
+    }
+
+    @Test
+    fun webDavConfigurationIsASecondLevelScreen() {
+        composeRule.onNodeWithContentDescription("设置").performClick()
+        composeRule.onNodeWithTag("settings_screen").performScrollToNode(hasText("WebDAV 同步"))
+        composeRule.onNodeWithText("WebDAV 同步").performClick()
+
+        composeRule.onNodeWithTag("webdav_settings_screen").assertExists()
+        composeRule.onNodeWithText("WebDAV 根地址").assertExists()
+    }
+
+    @Test
+    fun trashIsASecondLevelScreen() {
+        composeRule.onNodeWithContentDescription("设置").performClick()
+        composeRule.onNodeWithTag("settings_screen").performScrollToNode(hasText("回收站"))
+        composeRule.onNodeWithText("回收站").performClick()
+
+        composeRule.onNodeWithTag("trash_screen").assertExists()
     }
 }

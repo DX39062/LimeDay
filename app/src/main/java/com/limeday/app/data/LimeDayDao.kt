@@ -12,6 +12,9 @@ interface LimeDayDao {
     @Query("SELECT * FROM todos WHERE date = :date AND deleted_at IS NULL ORDER BY is_completed ASC, sort_order ASC, created_at ASC")
     fun observeTodos(date: String): Flow<List<TodoItem>>
 
+    @Query("SELECT * FROM todos WHERE deleted_at IS NOT NULL ORDER BY deleted_at DESC, updated_at DESC")
+    fun observeDeletedTodos(): Flow<List<TodoItem>>
+
     @Query("SELECT * FROM daily_reviews WHERE date = :date AND deleted_at IS NULL LIMIT 1")
     fun observeReview(date: String): Flow<DailyReview?>
 

@@ -18,18 +18,15 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Delete
-import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.SnackbarDuration
-import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.SwipeToDismissBox
 import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.Text
@@ -43,6 +40,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
@@ -51,9 +49,6 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.limeday.app.data.TodoItem
-import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -64,35 +59,42 @@ fun SwipeTodoRow(
     onDelete: () -> Unit
 ) {
     val dismissState = rememberSwipeToDismissBoxState(
-        confirmValueChange = { value ->
-            if (value == SwipeToDismissBoxValue.EndToStart) {
-                onDelete()
-                true
-            } else {
-                false
-            }
-        }
+        confirmValueChange = { true }
     )
 
     SwipeToDismissBox(
         state = dismissState,
         enableDismissFromStartToEnd = false,
         backgroundContent = {
-            Box(
-                modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.errorContainer).padding(horizontal = 20.dp),
-                contentAlignment = Alignment.CenterEnd
-            ) {
-                Icon(
-                    Icons.Rounded.Delete,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onErrorContainer
+            Button(
+                onClick = onDelete,
+                modifier = Modifier.fillMaxSize().then(
+                    if (dismissState.currentValue == SwipeToDismissBoxValue.EndToStart) Modifier
+                    else Modifier.clearAndSetSemantics { }
+                ),
+                shape = androidx.compose.foundation.shape.RoundedCornerShape(0.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.errorContainer,
+                    contentColor = MaterialTheme.colorScheme.onErrorContainer
                 )
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(Icons.Rounded.Delete, contentDescription = null)
+                    Text("移到回收站", modifier = Modifier.padding(start = 8.dp, end = 8.dp))
+                }
             }
         }
     ) {
         Column(modifier = Modifier.background(MaterialTheme.colorScheme.background)) {
             Row(
-                modifier = Modifier.fillMaxWidth().clickable(onClick = onEdit).padding(vertical = 4.dp),
+                modifier = Modifier.fillMaxWidth()
+                    .clickable(onClick = onEdit)
+                    .semantics { contentDescription = "编辑待办：${todo.title}" }
+                    .padding(vertical = 4.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 IconButton(
@@ -130,12 +132,6 @@ fun SwipeTodoRow(
                         )
                     }
                 }
-                Icon(
-                    Icons.Rounded.Edit,
-                    contentDescription = null,
-                    modifier = Modifier.size(16.dp),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant
-                )
             }
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = .65f))
         }
@@ -151,6 +147,7 @@ fun TodoEditor(
 ) {
     var title by remember(todo.id) { mutableStateOf(todo.title) }
     var note by remember(todo.id) { mutableStateOf(todo.note) }
+    var confirmDelete by remember(todo.id) { mutableStateOf(false) }
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("编辑待办") },
@@ -177,26 +174,32 @@ fun TodoEditor(
         },
         dismissButton = {
             Row {
-                TextButton(onClick = onDelete) {
+                TextButton(onClick = { confirmDelete = true }) {
                     Icon(Icons.Rounded.Delete, contentDescription = null)
-                    Text("删除", modifier = Modifier.padding(start = 6.dp))
+                    Text("移到回收站", modifier = Modifier.padding(start = 6.dp))
                 }
                 TextButton(onClick = onDismiss) { Text("取消") }
             }
         }
     )
-}
 
-suspend fun SnackbarHostState.showTodoDeleted(todo: TodoItem, onRestore: (TodoItem) -> Unit) = coroutineScope {
-    val timeout = launch {
-        delay(5_000)
-        currentSnackbarData?.dismiss()
+    if (confirmDelete) {
+        AlertDialog(
+            onDismissRequest = { confirmDelete = false },
+            title = { Text("移到回收站？") },
+            text = { Text("“${todo.title}”可以稍后从回收站恢复。") },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        confirmDelete = false
+                        onDelete()
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                ) { Text("确认移入") }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmDelete = false }) { Text("取消") }
+            }
+        )
     }
-    val result = showSnackbar(
-        message = "已删除“${todo.title}”",
-        actionLabel = "撤销",
-        duration = SnackbarDuration.Indefinite
-    )
-    timeout.cancel()
-    if (result == SnackbarResult.ActionPerformed) onRestore(todo)
 }

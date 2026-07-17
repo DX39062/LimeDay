@@ -2,6 +2,7 @@ package com.limeday.app.ui
 
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipeLeft
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -18,7 +19,7 @@ class TodoComponentsTest {
     val composeRule = createComposeRule()
 
     @Test
-    fun swipeLeftRequestsDeletion() {
+    fun swipeLeftOnlyRevealsDeleteAction() {
         var deleted = false
         composeRule.setContent {
             LimeDayTheme {
@@ -33,6 +34,28 @@ class TodoComponentsTest {
 
         composeRule.onNodeWithText("滑动删除测试").performTouchInput { swipeLeft() }
 
+        composeRule.runOnIdle { assertTrue(!deleted) }
+        composeRule.onNodeWithText("移到回收站").performClick()
+        composeRule.runOnIdle { assertTrue(deleted) }
+    }
+
+    @Test
+    fun editorDeletionRequiresConfirmation() {
+        var deleted = false
+        composeRule.setContent {
+            LimeDayTheme {
+                TodoEditor(
+                    todo = todo(),
+                    onDismiss = {},
+                    onSave = { _, _ -> },
+                    onDelete = { deleted = true }
+                )
+            }
+        }
+
+        composeRule.onNodeWithText("移到回收站").performClick()
+        composeRule.runOnIdle { assertTrue(!deleted) }
+        composeRule.onNodeWithText("确认移入").performClick()
         composeRule.runOnIdle { assertTrue(deleted) }
     }
 

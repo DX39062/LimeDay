@@ -1,6 +1,5 @@
 package com.limeday.app.ui
 
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -12,7 +11,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
@@ -29,8 +27,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SnackbarHost
-import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -41,13 +37,9 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import com.limeday.app.data.DailyReview
@@ -55,7 +47,6 @@ import com.limeday.app.data.TodoItem
 import com.limeday.app.llm.LlmConfig
 import java.time.format.DateTimeFormatter
 import java.util.Locale
-import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -67,7 +58,6 @@ fun ReviewScreen(
     onToggleTodo: (TodoItem) -> Unit,
     onUpdateTodo: (TodoItem, String, String) -> Unit,
     onDeleteTodo: (TodoItem) -> Unit,
-    onRestoreTodo: (TodoItem) -> Unit,
     onSaveLlmConfig: (LlmConfig) -> Unit,
     onClearLlmConfig: () -> Unit,
     onGenerateSummary: () -> Unit,
@@ -76,12 +66,6 @@ fun ReviewScreen(
 ) {
     var showLlmSettings by remember { mutableStateOf(false) }
     var editingTodo by remember { mutableStateOf<TodoItem?>(null) }
-    val snackbarHostState = remember { SnackbarHostState() }
-    val scope = rememberCoroutineScope()
-    val deleteWithUndo: (TodoItem) -> Unit = { todo ->
-        onDeleteTodo(todo)
-        scope.launch { snackbarHostState.showTodoDeleted(todo, onRestoreTodo) }
-    }
     val review = state.review
     val formatter = remember { DateTimeFormatter.ofPattern("M月d日 EEEE", Locale.SIMPLIFIED_CHINESE) }
 
@@ -104,7 +88,6 @@ fun ReviewScreen(
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background)
             )
         },
-        snackbarHost = { SnackbarHost(snackbarHostState) },
         containerColor = MaterialTheme.colorScheme.background
     ) { innerPadding ->
         if (review == null) {
@@ -117,12 +100,6 @@ fun ReviewScreen(
                 contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 12.dp, bottom = 40.dp),
                 verticalArrangement = Arrangement.spacedBy(18.dp)
             ) {
-                item {
-                    Text(
-                        "把今天留下来",
-                        style = MaterialTheme.typography.headlineLarge
-                    )
-                }
                 item {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -151,15 +128,30 @@ fun ReviewScreen(
                             todo = todo,
                             onToggle = { onToggleTodo(todo) },
                             onEdit = { editingTodo = todo },
-                            onDelete = { deleteWithUndo(todo) }
+                            onDelete = { onDeleteTodo(todo) }
                         )
                     }
                 }
-                item { ReviewField("今天最值得记住的亮点", review.highlight) { value -> onUpdateReview { it.copy(highlight = value) } } }
-                item { ReviewField("遇到了什么困难？", review.challenge) { value -> onUpdateReview { it.copy(challenge = value) } } }
-                item { ReviewField("今天有什么收获？", review.learning) { value -> onUpdateReview { it.copy(learning = value) } } }
-                item { ReviewField("明天最重要的一件事", review.tomorrowFocus) { value -> onUpdateReview { it.copy(tomorrowFocus = value) } } }
-                item { MoodSelector(review.mood) { mood -> onUpdateReview { it.copy(mood = mood) } } }
+                item {
+                    ReviewField(
+                        label = "解决了什么问题？",
+                        value = review.challenge,
+                        maxLength = 1000,
+                        minLines = 2
+                    ) { value -> onUpdateReview { it.copy(challenge = value) } }
+                }
+                item {
+                    ReviewField(
+                        label = "随便写写",
+                        value = review.freeWriteText(),
+                        maxLength = 3200,
+                        minLines = 4
+                    ) { value ->
+                        onUpdateReview {
+                            it.withFreeWrite(value)
+                        }
+                    }
+                }
                 item {
                     SummaryPanel(
                         state = state,
@@ -199,7 +191,7 @@ fun ReviewScreen(
                 editingTodo = null
             },
             onDelete = {
-                deleteWithUndo(todo)
+                onDeleteTodo(todo)
                 editingTodo = null
             }
         )
@@ -207,46 +199,22 @@ fun ReviewScreen(
 }
 
 @Composable
-private fun ReviewField(label: String, value: String, onValueChange: (String) -> Unit) {
+private fun ReviewField(
+    label: String,
+    value: String,
+    maxLength: Int,
+    minLines: Int,
+    onValueChange: (String) -> Unit
+) {
     OutlinedTextField(
         value = value,
-        onValueChange = { onValueChange(it.take(1000)) },
+        onValueChange = { onValueChange(it.take(maxLength)) },
         modifier = Modifier.fillMaxWidth(),
         label = { Text(label) },
-        supportingText = { Text("${value.length} / 1000") },
-        minLines = 3,
+        minLines = minLines,
         maxLines = 7,
         shape = RoundedCornerShape(12.dp)
     )
-}
-
-@Composable
-private fun MoodSelector(selected: Int, onSelect: (Int) -> Unit) {
-    val labels = listOf("很累", "低落", "平静", "不错", "很好")
-    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Text("今天的心情", style = MaterialTheme.typography.titleMedium)
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            labels.forEachIndexed { index, label ->
-                val mood = index + 1
-                val active = selected == mood
-                Column(
-                    modifier = Modifier.weight(1f).clip(RoundedCornerShape(10.dp))
-                        .clickable { onSelect(if (active) 0 else mood) }
-                        .padding(vertical = 10.dp)
-                        .semantics { contentDescription = "心情：$label${if (active) "，已选择" else ""}" },
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(7.dp)
-                ) {
-                    Surface(
-                        modifier = Modifier.size(14.dp),
-                        shape = CircleShape,
-                        color = if (active) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.outlineVariant
-                    ) {}
-                    Text(label, style = MaterialTheme.typography.labelMedium, color = if (active) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-            }
-        }
-    }
 }
 
 @Composable

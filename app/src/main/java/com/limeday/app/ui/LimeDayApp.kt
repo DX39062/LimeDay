@@ -29,7 +29,6 @@ fun LimeDayApp(
                 onToggleTodo = viewModel::toggleTodo,
                 onUpdateTodo = viewModel::updateTodo,
                 onDeleteTodo = viewModel::deleteTodo,
-                onRestoreTodo = viewModel::restoreTodo,
                 onOpenReview = { navController.navigate("review") },
                 onOpenSettings = { navController.navigate("settings") }
             )
@@ -43,7 +42,6 @@ fun LimeDayApp(
                 onToggleTodo = viewModel::toggleTodo,
                 onUpdateTodo = viewModel::updateTodo,
                 onDeleteTodo = viewModel::deleteTodo,
-                onRestoreTodo = viewModel::restoreTodo,
                 onSaveLlmConfig = viewModel::saveLlmConfig,
                 onClearLlmConfig = viewModel::clearLlmConfig,
                 onGenerateSummary = viewModel::generateSummary,
@@ -55,10 +53,6 @@ fun LimeDayApp(
             SettingsScreen(
                 state = state,
                 onBack = navController::popBackStack,
-                onSave = viewModel::saveWebDavConfig,
-                onClear = viewModel::clearWebDavConfig,
-                onTest = viewModel::testWebDav,
-                onSync = viewModel::syncNow,
                 notificationPermissionGranted = notificationPermissionGranted,
                 onRequestNotificationPermission = onRequestNotificationPermission,
                 onSetThemeMode = viewModel::setThemeMode,
@@ -66,7 +60,26 @@ fun LimeDayApp(
                 onSetReviewReminder = viewModel::setReviewReminder,
                 onRequestExport = onRequestExport,
                 onRequestImport = onRequestImport,
-                onClearDataMessage = viewModel::clearDataMessage
+                onClearDataMessage = viewModel::clearDataMessage,
+                onOpenTrash = { navController.navigate("trash") },
+                onOpenWebDav = { navController.navigate("webdav") }
+            )
+        }
+        composable("trash") {
+            TrashScreen(
+                state = state,
+                onBack = navController::popBackStack,
+                onRestore = viewModel::restoreTodo
+            )
+        }
+        composable("webdav") {
+            WebDavSettingsScreen(
+                state = state,
+                onBack = navController::popBackStack,
+                onSave = viewModel::saveWebDavConfig,
+                onClear = viewModel::clearWebDavConfig,
+                onTest = viewModel::testWebDav,
+                onSync = viewModel::syncNow
             )
         }
     }
