@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -16,25 +17,18 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.ArrowBack
-import androidx.compose.material.icons.automirrored.rounded.ArrowForward
-import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
-import androidx.compose.material.icons.rounded.DateRange
-import androidx.compose.material.icons.rounded.Settings
+import androidx.compose.foundation.Canvas
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledIconButton
-import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -45,7 +39,6 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -58,10 +51,9 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import com.limeday.app.data.TodoItem
 import java.time.LocalDate
+import java.time.YearMonth
 import java.time.format.DateTimeFormatter
 import java.util.Locale
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.animateIntAsState
 import androidx.compose.animation.core.tween
@@ -82,30 +74,19 @@ fun DayScreen(
     onDeleteTodo: (TodoItem) -> Unit,
     onRestoreTodo: (TodoItem) -> Unit,
     onOpenReview: () -> Unit,
-    onOpenSettings: () -> Unit
+    onSelectDate: (LocalDate) -> Unit,
+    onLoadMonth: (LocalDate) -> Unit
 ) {
     var editingTodo by remember { mutableStateOf<TodoItem?>(null) }
     var expandedTodoId by remember { mutableStateOf<String?>(null) }
     val snackbarHostState = remember { SnackbarHostState() }
-    val scope = rememberCoroutineScope()
-    val deleteWithUndo: (TodoItem) -> Unit = { todo ->
-        onDeleteTodo(todo)
-        expandedTodoId = null
-        scope.launch {
-            snackbarHostState.currentSnackbarData?.dismiss()
-            val timeout = launch {
-                delay(5_000)
-                snackbarHostState.currentSnackbarData?.dismiss()
-            }
-            val result = snackbarHostState.showSnackbar(
-                message = "已移入回收站",
-                actionLabel = "撤销",
-                duration = SnackbarDuration.Indefinite
-            )
-            timeout.cancel()
-            if (result == SnackbarResult.ActionPerformed) onRestoreTodo(todo)
-        }
-    }
+    var calendarMonth by remember { mutableStateOf<YearMonth?>(null) }
+    val deleteWithUndo = rememberTodoDeleteWithUndo(
+        snackbarHostState = snackbarHostState,
+        onDelete = onDeleteTodo,
+        onRestore = onRestoreTodo,
+        onDeleted = { expandedTodoId = null }
+    )
 
     Scaffold(
         topBar = {
@@ -116,11 +97,7 @@ fun DayScreen(
                         Text("每日计划", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 },
-                actions = {
-                    IconButton(onClick = onOpenSettings) {
-                        Icon(Icons.Rounded.Settings, contentDescription = "设置")
-                    }
-                },
+                actions = { LimeHeaderDoodle(Modifier.size(72.dp, 44.dp).padding(end = 12.dp)) },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background)
             )
         },
@@ -137,7 +114,18 @@ fun DayScreen(
                 contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 40.dp),
                 verticalArrangement = Arrangement.spacedBy(20.dp)
             ) {
-                item { DateHeader(state.selectedDate, onPreviousDay, onNextDay, onToday) }
+                item {
+                    DateHeader(
+                        date = state.selectedDate,
+                        onPrevious = onPreviousDay,
+                        onNext = onNextDay,
+                        onToday = onToday,
+                        onOpenCalendar = {
+                            calendarMonth = YearMonth.from(state.selectedDate)
+                            onLoadMonth(state.selectedDate)
+                        }
+                    )
+                }
                 item { ProgressPanel(state) }
                 item { QuickAdd(onAddTodo) }
                 if (state.todos.isEmpty()) {
@@ -179,6 +167,27 @@ fun DayScreen(
             }
         )
     }
+
+    calendarMonth?.let { month ->
+        MonthJumpDialog(
+            month = month,
+            selectedDate = state.selectedDate,
+            statuses = state.monthTodoStatuses,
+            onMonthChange = { next ->
+                calendarMonth = next
+                onLoadMonth(next.atDay(1))
+            },
+            onSelect = { selected ->
+                onSelectDate(selected)
+                calendarMonth = null
+            },
+            onToday = {
+                onToday()
+                calendarMonth = null
+            },
+            onDismiss = { calendarMonth = null }
+        )
+    }
 }
 
 @Composable
@@ -186,7 +195,8 @@ private fun DateHeader(
     date: LocalDate,
     onPrevious: () -> Unit,
     onNext: () -> Unit,
-    onToday: () -> Unit
+    onToday: () -> Unit,
+    onOpenCalendar: () -> Unit
 ) {
     val formatter = remember { DateTimeFormatter.ofPattern("M月d日 EEEE", Locale.SIMPLIFIED_CHINESE) }
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -196,21 +206,30 @@ private fun DateHeader(
         )
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onPrevious) {
-                Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "前一天")
+                DoodleIcon(DoodleIconType.Back, "前一天", Modifier.size(24.dp), MaterialTheme.colorScheme.onSurface)
             }
             Surface(
-                modifier = Modifier.weight(1f),
+                onClick = onOpenCalendar,
+                modifier = Modifier.weight(1f).semantics { contentDescription = "选择日期" },
                 shape = RoundedCornerShape(12.dp),
                 color = MaterialTheme.colorScheme.surfaceContainer
             ) {
-                Text(
-                    date.format(formatter),
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 13.dp),
-                    style = MaterialTheme.typography.titleMedium
-                )
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 13.dp),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(date.format(formatter), style = MaterialTheme.typography.titleMedium)
+                    DoodleIcon(
+                        DoodleIconType.Calendar,
+                        null,
+                        Modifier.padding(start = 10.dp).size(20.dp),
+                        MaterialTheme.colorScheme.primary
+                    )
+                }
             }
             IconButton(onClick = onNext) {
-                Icon(Icons.AutoMirrored.Rounded.ArrowForward, contentDescription = "后一天")
+                DoodleIcon(DoodleIconType.Forward, "后一天", Modifier.size(24.dp), MaterialTheme.colorScheme.onSurface)
             }
         }
         if (date != LocalDate.now()) {
@@ -310,7 +329,7 @@ private fun ReviewEntry(state: DayUiState, onOpenReview: () -> Unit) {
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(14.dp)
         ) {
-            Icon(Icons.Rounded.DateRange, contentDescription = null, tint = MaterialTheme.colorScheme.tertiary)
+            DoodleIcon(DoodleIconType.Review, null, Modifier.size(26.dp), MaterialTheme.colorScheme.tertiary)
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                 Text(if (state.hasReview) "继续复盘" else "开始复盘", style = MaterialTheme.typography.titleMedium)
                 Text(
@@ -323,7 +342,96 @@ private fun ReviewEntry(state: DayUiState, onOpenReview: () -> Unit) {
                     color = MaterialTheme.colorScheme.onTertiaryContainer
                 )
             }
-            Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, contentDescription = null, modifier = Modifier.size(20.dp))
+            DoodleIcon(DoodleIconType.ChevronRight, null, Modifier.size(20.dp), MaterialTheme.colorScheme.onTertiaryContainer)
         }
     }
+}
+
+@Composable
+private fun MonthJumpDialog(
+    month: YearMonth,
+    selectedDate: LocalDate,
+    statuses: Map<LocalDate, MonthTodoStatus>,
+    onMonthChange: (YearMonth) -> Unit,
+    onSelect: (LocalDate) -> Unit,
+    onToday: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    val monthFormatter = remember { DateTimeFormatter.ofPattern("yyyy年 M月", Locale.SIMPLIFIED_CHINESE) }
+    val weekdays = remember { listOf("一", "二", "三", "四", "五", "六", "日") }
+    val first = month.atDay(1)
+    val leading = first.dayOfWeek.value - 1
+    val cellCount = leading + month.lengthOfMonth()
+    val rows = (cellCount + 6) / 7
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                IconButton(onClick = { onMonthChange(month.minusMonths(1)) }) {
+                    DoodleIcon(DoodleIconType.Back, "上个月", Modifier.size(22.dp), MaterialTheme.colorScheme.onSurface)
+                }
+                Text(month.format(monthFormatter), modifier = Modifier.weight(1f), style = MaterialTheme.typography.titleLarge)
+                IconButton(onClick = { onMonthChange(month.plusMonths(1)) }) {
+                    DoodleIcon(DoodleIconType.Forward, "下个月", Modifier.size(22.dp), MaterialTheme.colorScheme.onSurface)
+                }
+            }
+        },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                Row(Modifier.fillMaxWidth()) {
+                    weekdays.forEach { label ->
+                        Text(
+                            label,
+                            modifier = Modifier.weight(1f),
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+                repeat(rows) { row ->
+                    Row(Modifier.fillMaxWidth()) {
+                        repeat(7) { column ->
+                            val dayNumber = row * 7 + column - leading + 1
+                            if (dayNumber !in 1..month.lengthOfMonth()) {
+                                Spacer(Modifier.weight(1f).height(46.dp))
+                            } else {
+                                val date = month.atDay(dayNumber)
+                                val status = statuses[date]
+                                val description = buildString {
+                                    append(date.format(DateTimeFormatter.ofPattern("M月d日 EEEE", Locale.SIMPLIFIED_CHINESE)))
+                                    if (status != null) append("，${status.completed}/${status.total} 项完成")
+                                }
+                                Surface(
+                                    onClick = { onSelect(date) },
+                                    modifier = Modifier.weight(1f).height(46.dp).semantics { contentDescription = description },
+                                    shape = CircleShape,
+                                    color = if (date == selectedDate) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface
+                                ) {
+                                    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+                                        Text(dayNumber.toString(), style = MaterialTheme.typography.bodyMedium)
+                                        if (status != null) {
+                                            val dotColor = MaterialTheme.colorScheme.primary
+                                            Canvas(Modifier.size(7.dp)) {
+                                                if (status.allCompleted) {
+                                                    drawCircle(dotColor)
+                                                } else {
+                                                    drawCircle(
+                                                        dotColor,
+                                                        style = androidx.compose.ui.graphics.drawscope.Stroke(width = 1.5.dp.toPx())
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = onToday) { Text("今天") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } }
+    )
 }

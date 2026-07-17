@@ -14,6 +14,8 @@ class LimeDayRepository(private val database: AppDatabase) {
     fun observeSummary(date: String): Flow<DailySummary?> = dao.observeSummary(date)
     fun observeRangeSummaries(): Flow<List<RangeSummary>> = dao.observeRangeSummaries()
 
+    suspend fun todosBetween(start: String, end: String): List<TodoItem> = dao.todosBetween(start, end)
+
     suspend fun deviceId(): String = ensureMetadata().deviceId
 
     suspend fun addTodo(date: String, title: String, note: String = "") {

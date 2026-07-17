@@ -10,21 +10,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.ArrowBack
-import androidx.compose.material.icons.automirrored.rounded.ArrowForward
-import androidx.compose.material.icons.rounded.Check
-import androidx.compose.material.icons.rounded.Delete
-import androidx.compose.material.icons.rounded.DateRange
-import androidx.compose.material.icons.rounded.Info
-import androidx.compose.material.icons.rounded.Notifications
-import androidx.compose.material.icons.rounded.Refresh
-import androidx.compose.material.icons.rounded.Settings
-import androidx.compose.material.icons.rounded.Star
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -57,7 +45,6 @@ import java.util.Locale
 @Composable
 fun SettingsScreen(
     state: DayUiState,
-    onBack: () -> Unit,
     notificationPermissionGranted: Boolean,
     onRequestNotificationPermission: () -> Unit,
     onSetThemeMode: (ThemeMode) -> Unit,
@@ -78,11 +65,6 @@ fun SettingsScreen(
         topBar = {
             TopAppBar(
                 title = { Text("设置") },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "返回")
-                    }
-                },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background)
             )
         },
@@ -93,21 +75,14 @@ fun SettingsScreen(
             contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 12.dp, bottom = 40.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            item { SectionTitle(Icons.Rounded.Settings, "外观") }
+            item { SectionTitle(DoodleIconType.Reminder, "待办设置") }
             item {
-                SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
-                    ThemeMode.entries.forEachIndexed { index, mode ->
-                        SegmentedButton(
-                            selected = settings.themeMode == mode,
-                            onClick = { onSetThemeMode(mode) },
-                            shape = SegmentedButtonDefaults.itemShape(index, ThemeMode.entries.size)
-                        ) { Text(mode.label) }
-                    }
-                }
+                Text(
+                    "提醒与回收站",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
-
-            item { HorizontalDivider(Modifier.padding(vertical = 4.dp)) }
-            item { SectionTitle(Icons.Rounded.Notifications, "每日提醒") }
             item {
                 ReminderRow(
                     title = "待办提醒",
@@ -155,17 +130,58 @@ fun SettingsScreen(
                     }
                 }
             }
+            item {
+                SettingsNavigationRow(
+                    icon = DoodleIconType.Trash,
+                    title = "回收站",
+                    subtitle = if (state.deletedTodos.isEmpty()) "没有已删除待办" else "${state.deletedTodos.size} 项待办可恢复",
+                    onClick = onOpenTrash
+                )
+            }
 
             item { HorizontalDivider(Modifier.padding(vertical = 4.dp)) }
-            item { SectionTitle(Icons.Rounded.DateRange, "数据备份") }
+            item { SectionTitle(DoodleIconType.Summary, "总结设置") }
+            item {
+                SettingsNavigationRow(
+                    icon = DoodleIconType.Summary,
+                    title = "模型服务",
+                    subtitle = state.activeLlmProvider?.let { "${state.llmSettings.providers.size} 个服务，默认 ${it.name}" } ?: "未配置",
+                    onClick = onOpenLlmProviders
+                )
+            }
+            item {
+                Text(
+                    "快捷指令、收藏与最近使用记录随模型服务设置加密保存在本机。",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+
+            item { HorizontalDivider(Modifier.padding(vertical = 4.dp)) }
+            item { SectionTitle(DoodleIconType.Appearance, "通用设置") }
+            item { Text("外观模式", style = MaterialTheme.typography.titleMedium) }
+            item {
+                SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
+                    ThemeMode.entries.forEachIndexed { index, mode ->
+                        SegmentedButton(
+                            selected = settings.themeMode == mode,
+                            onClick = { onSetThemeMode(mode) },
+                            shape = SegmentedButtonDefaults.itemShape(index, ThemeMode.entries.size),
+                            icon = {}
+                        ) { Text(mode.label) }
+                    }
+                }
+            }
+
+            item { Text("数据备份", style = MaterialTheme.typography.titleMedium) }
             item {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     OutlinedButton(onClick = onRequestExport, modifier = Modifier.weight(1f)) {
-                        Icon(Icons.AutoMirrored.Rounded.ArrowForward, contentDescription = null)
+                        DoodleIcon(DoodleIconType.Export, null, Modifier.size(22.dp), MaterialTheme.colorScheme.primary)
                         Text("导出", modifier = Modifier.padding(start = 8.dp))
                     }
                     OutlinedButton(onClick = onRequestImport, modifier = Modifier.weight(1f)) {
-                        Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = null)
+                        DoodleIcon(DoodleIconType.Import, null, Modifier.size(22.dp), MaterialTheme.colorScheme.primary)
                         Text("导入", modifier = Modifier.padding(start = 8.dp))
                     }
                 }
@@ -179,7 +195,7 @@ fun SettingsScreen(
                         ) {
                             Text(message, modifier = Modifier.weight(1f))
                             IconButton(onClick = onClearDataMessage) {
-                                Icon(Icons.Rounded.Check, contentDescription = "关闭提示")
+                                DoodleIcon(DoodleIconType.Check, "关闭提示", Modifier.size(22.dp), MaterialTheme.colorScheme.primary)
                             }
                         }
                     }
@@ -194,27 +210,7 @@ fun SettingsScreen(
             }
             item {
                 SettingsNavigationRow(
-                    icon = Icons.Rounded.Delete,
-                    title = "回收站",
-                    subtitle = if (state.deletedTodos.isEmpty()) "没有已删除待办" else "${state.deletedTodos.size} 项待办可恢复",
-                    onClick = onOpenTrash
-                )
-            }
-
-            item { HorizontalDivider(Modifier.padding(vertical = 4.dp)) }
-            item {
-                SettingsNavigationRow(
-                    icon = Icons.Rounded.Star,
-                    title = "模型服务",
-                    subtitle = state.activeLlmProvider?.let { "${state.llmSettings.providers.size} 个供应商，默认 ${it.name}" } ?: "未配置",
-                    onClick = onOpenLlmProviders
-                )
-            }
-
-            item { HorizontalDivider(Modifier.padding(vertical = 4.dp)) }
-            item {
-                SettingsNavigationRow(
-                    icon = Icons.Rounded.Refresh,
+                    icon = DoodleIconType.WebDav,
                     title = "WebDAV 同步",
                     subtitle = when {
                         state.isSyncing -> "正在同步"
@@ -226,12 +222,11 @@ fun SettingsScreen(
                 )
             }
 
-            item { HorizontalDivider(Modifier.padding(vertical = 4.dp)) }
-            item { SectionTitle(Icons.Rounded.Info, "关于") }
+            item { Text("关于", style = MaterialTheme.typography.titleMedium) }
             item {
                 val context = LocalContext.current
                 val version = remember {
-                    context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: "2.5.0"
+                    context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: "2.6.0"
                 }
                 Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text("青柠日记 $version", style = MaterialTheme.typography.titleMedium)
@@ -269,7 +264,7 @@ fun SettingsScreen(
             text = {
                 Text(
                     if (dialog == InfoDialog.Privacy) {
-                        "待办、复盘和总结默认保存在本机。WebDAV 同步仅在配置后运行；智能总结仅在你主动生成时发送所选日期内容。密码、供应商端点和 API Key 使用 Android Keystore 加密，不会进入备份或同步文件。"
+                        "待办、复盘和总结默认保存在本机。WebDAV 同步仅在配置后运行；智能总结仅在你主动生成时发送所选日期内容。密码、模型服务端点和 API Key 使用 Android Keystore 加密，不会进入备份或同步文件。"
                     } else {
                         "本应用使用 Kotlin、Jetpack Compose、AndroidX、Room、WorkManager、OkHttp 和 org.json。各组件遵循其 Apache License 2.0 或对应开源许可证。"
                     }
@@ -281,16 +276,16 @@ fun SettingsScreen(
 }
 
 @Composable
-private fun SectionTitle(icon: androidx.compose.ui.graphics.vector.ImageVector, title: String) {
+private fun SectionTitle(icon: DoodleIconType, title: String) {
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-        Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+        DoodleIcon(icon, null, Modifier.size(26.dp), MaterialTheme.colorScheme.primary)
         Text(title, style = MaterialTheme.typography.headlineSmall)
     }
 }
 
 @Composable
 private fun SettingsNavigationRow(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    icon: DoodleIconType,
     title: String,
     subtitle: String,
     onClick: () -> Unit
@@ -301,12 +296,12 @@ private fun SettingsNavigationRow(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+            DoodleIcon(icon, null, Modifier.size(24.dp), MaterialTheme.colorScheme.primary)
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text(title, style = MaterialTheme.typography.titleMedium)
                 Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
-            Icon(Icons.AutoMirrored.Rounded.ArrowForward, contentDescription = null)
+            DoodleIcon(DoodleIconType.ChevronRight, null, Modifier.size(20.dp), MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }
@@ -326,7 +321,7 @@ private fun ReminderRow(
             Text(if (enabled) "每天 ${formatReminderTime(hour, minute)}" else "已关闭", color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         IconButton(onClick = onEditTime) {
-            Icon(Icons.Rounded.DateRange, contentDescription = "设置${title}时间")
+            DoodleIcon(DoodleIconType.Calendar, "设置${title}时间", Modifier.size(23.dp), MaterialTheme.colorScheme.primary)
         }
         Switch(checked = enabled, onCheckedChange = onToggle)
     }

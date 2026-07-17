@@ -31,6 +31,15 @@ class DayUiStateTest {
         assertEquals(33, state.progressPercent)
     }
 
+    @Test
+    fun `month status distinguishes partial and fully completed days`() {
+        val partial = MonthTodoStatus(total = 3, completed = 2)
+        val complete = MonthTodoStatus(total = 2, completed = 2)
+
+        assertEquals(false, partial.allCompleted)
+        assertEquals(true, complete.allCompleted)
+    }
+
     private fun todo(id: String, date: String, title: String, completed: Boolean = false) = TodoItem(
         id = id,
         date = date,

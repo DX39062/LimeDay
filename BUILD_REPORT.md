@@ -1,13 +1,13 @@
-# 青柠日记 2.5.0 构建报告
+# 青柠日记 2.6.0 构建报告
 
-构建时间：2026-07-17（Asia/Shanghai）
+构建时间：2026-07-18（Asia/Shanghai）
 
 ## 交付物
 
-- 仓库 APK：`releases/LimeDay-2.5.0-arm64-v8a.apk`
+- 仓库 APK：`releases/LimeDay-2.6.0-arm64-v8a.apk`
 - Gradle 输出：`app/build/outputs/apk/release/app-arm64-v8a-release.apk`
-- 文件大小：8,636,159 bytes
-- SHA-256：`85022CD19828311C19F7E5C241B359DF47F1EE06AE313C9E846532AE3D7518A7`
+- 文件大小：8,653,303 bytes
+- SHA-256：`7E646F7138E145ACC7338893CB4D852373D62A1B4A8D17F881F2F8292B10BE2E`
 - 架构：仅 `arm64-v8a`
 - 签名：Android Debug RSA 2048，APK Signature Scheme v2 验证通过
 
@@ -16,7 +16,7 @@
 ## 版本与平台
 
 - Application ID：`com.limeday.app`
-- Version：`2.5.0`（versionCode `2500`）
+- Version：`2.6.0`（versionCode `2600`）
 - minSdk：26
 - targetSdk / compileSdk：36
 - Android Build Tools：36.0.0
@@ -25,37 +25,33 @@
 - Kotlin：2.3.20
 - JDK：17
 
-## 2.5.0 功能
+## 2.6.0 功能
 
-- 模型设置升级为独立二级页面，以卡片管理多个供应商并标记当前默认项。
-- 支持添加、编辑、复制、删除、启用、上移、下移、连接检查和模型列表刷新。
-- 内置 OpenAI、Anthropic、Gemini、OpenRouter、DeepSeek、Kimi、通义千问、智谱 GLM、SiliconFlow、MiniMax、豆包、xAI、Mistral、Groq、Ollama 和自定义 OpenAI 兼容预设。
-- 支持 OpenAI Chat Completions、OpenAI Responses、Anthropic Messages 和 Gemini Native 四类协议。
-- 模型发现支持版本化地址、兼容路径候选和精确地址覆盖；失败后仍可手填保存，成功列表加密缓存 24 小时。
-- 供应商、API Key、模型缓存、收藏指令和最近指令继续使用 Android Keystore AES/GCM 加密；旧版单供应商配置自动迁移且保留原协议。
-- 每日总结支持快捷或自由的一次性指令、收藏、最近 10 条记录，以及单次供应商和模型覆盖。
-- 新增底部“总结”主页面，支持本周、本月、本季度和最长 93 天的自定义范围。
-- 范围总结默认使用原始待办和复盘，可选加入已有每日总结；长输入按日期分段并分层综合。
-- 每次范围生成保留独立历史，可软删除并通过 WebDAV/JSON 备份同步。
-- Room 升级到 schema 6；WebDAV JSON v1 新增可选 `rangeSummaries`，旧文件缺失时按空列表兼容。
-- 供应商卡片操作与协议标识使用 Compose Canvas 自绘图标。
+- 设置成为第三个底部一级页面，待办提醒、复盘提醒、回收站、模型服务、提示词、外观、数据、WebDAV 和关于集中分组管理。
+- 模型服务保留多配置加密存储，同一厂商可保存多份配置；卡片主体与固定自绘铅笔均可编辑，操作区支持自动换行。
+- 新建模型服务在首次保存前提供显式“手动获取模型”，仅在用户点击时联网；失败仍可手填模型并保存，未保存配置不会留下孤立缓存。
+- 总结历史逐条默认折叠，可独立展开且不持久化展开状态。
+- 待办日期卡片可打开当前所选月份的快速月历，支持立即跳转、回到今天和待办完成状态圆点。
+- 每日待办与复盘共用 6 秒删除撤销；连续删除合并成一个批次，一次撤销恢复整批。
+- 应用图标改为便签、对勾与青柠切片组成的涂鸦图形；底部导航、页面操作、下拉箭头和待办页顶部装饰均为 Compose Canvas 或自有矢量绘制。
+- 保持 Room schema 6、WebDAV JSON v1、四类 LLM 协议、16 个服务预设与最长 93 天范围总结兼容。
 
 ## 自动化验证
 
 ### JVM 单元测试
 
-`testDebugUnitTest`：33 项通过，0 失败。
+`testDebugUnitTest`：37 项通过，0 失败。
 
-- 每日进度、复盘旧数据映射和设置默认值：6 项。
-- 四协议响应解析、模型列表解析、地址候选、HTTP 安全开关、模型缓存与模拟网络请求：14 项。
+- 每日进度、月份状态、删除撤销提示、复盘旧数据映射和设置默认值：9 项。
+- 四协议响应解析、模型列表解析、地址候选、HTTP 安全开关、模型缓存、同厂商多配置与模拟网络请求：15 项。
 - 同步/备份 JSON、范围总结兼容与冲突合并：10 项。
 - HTTPS WebDAV 与首次同步流程：3 项。
 
 ### Android 测试
 
-- `assembleDebugAndroidTest`：通过，18 项测试代码及测试 APK 编译成功。
-- 覆盖 Room v1/v2/v3/v4/v5 到 v6 的迁移、回收站、待办手势与操作、复盘页面、模型供应商二级页、总结主页面和 WebDAV 二级页。
-- 当前构建环境没有可用 platform-tools、Android 设备或 AVD，因此没有执行 `connectedDebugAndroidTest`；迁移与 Compose 仪器测试只完成了编译验证。
+- `assembleDebugAndroidTest`：通过，22 项测试代码及测试 APK 编译成功。
+- 覆盖 Room v1/v2/v3/v4/v5 到 v6 的迁移、回收站、待办手势与操作、三级主导航、快速月历、模型服务固定编辑/首次取模、默认折叠历史和 WebDAV 二级页。
+- SDK 36 与 platform-tools 安装在临时目录，但没有连接 Android 设备或 AVD，因此没有执行 `connectedDebugAndroidTest`；迁移与 Compose 仪器测试只完成了编译验证。
 
 ### Lint
 
@@ -65,7 +61,7 @@
 ## APK 检查
 
 - `assembleRelease` 与 release vital lint：通过。
-- `aapt dump badging`：Application ID、2.5.0 / 2500、minSdk 26、targetSdk 36 正确。
+- `aapt dump badging`：Application ID、2.6.0 / 2600、minSdk 26、targetSdk 36 正确。
 - APK 中仅包含 `arm64-v8a` 原生库。
 - `apksigner verify --verbose --print-certs`：v2 签名通过，签名者为开发交付用 Android Debug 证书。
 - `unzip -t`：压缩内容完整，无错误。
@@ -75,5 +71,11 @@
 
 - `legacy/android-kotlin-1.1`：旧 Kotlin 1.1 实现。
 - `legacy/flutter-2.0`：Flutter 2.0 实现。
-- `main`：当前 Kotlin/Compose 2.5.0 实现。
-- 计划标签与公开 GitHub Release：`v2.5.0`。
+- `main`：当前 Kotlin/Compose 2.6.0 实现。
+- 标签与公开 GitHub Release：`v2.6.0`。
+
+## 构建缓存清理
+
+- 发布 APK、测试结果与报告落盘后停止 Gradle daemon。
+- 删除项目 `.gradle`、`app/build` 和本次专用的 `/private/tmp/android-sdk`；不清理可复用于其他项目的用户级 `~/.gradle` 缓存。
+- 清理对象约 484 MB，后续本机构建需重新配置可用 Android SDK 36。

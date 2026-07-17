@@ -40,6 +40,7 @@ class NavigationUiTest {
         composeRule.onNodeWithContentDescription("设置").performClick()
 
         composeRule.onNodeWithTag("settings_screen").assertExists()
+        composeRule.onNodeWithContentDescription("返回").assertDoesNotExist()
         composeRule.onNodeWithText("WebDAV 根地址").assertDoesNotExist()
     }
 
@@ -50,6 +51,16 @@ class NavigationUiTest {
         composeRule.onNodeWithTag("summary_screen").assertExists()
         composeRule.onNodeWithText("本周").assertExists()
         composeRule.onNodeWithText("总结历史").assertExists()
+        composeRule.onNodeWithContentDescription("模型服务").assertDoesNotExist()
+    }
+
+    @Test
+    fun dateCardOpensMonthJumpDialog() {
+        composeRule.onNodeWithContentDescription("选择日期").performClick()
+
+        composeRule.onNodeWithContentDescription("上个月").assertExists()
+        composeRule.onNodeWithContentDescription("下个月").assertExists()
+        composeRule.onNodeWithText("取消").assertExists()
     }
 
     @Test

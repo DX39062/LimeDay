@@ -4,6 +4,8 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -17,8 +19,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
@@ -26,10 +26,9 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
-import androidx.compose.material3.ExposedDropdownMenuDefaults
-import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.MenuAnchorType
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
@@ -47,6 +46,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
@@ -76,10 +77,14 @@ fun LlmProviderSettingsScreen(
             TopAppBar(
                 title = { Text("模型服务") },
                 navigationIcon = {
-                    IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "返回") }
+                    IconButton(onClick = onBack) {
+                        DoodleIcon(DoodleIconType.Back, "返回", Modifier.size(24.dp), MaterialTheme.colorScheme.onSurface)
+                    }
                 },
                 actions = {
-                    IconButton(onClick = {
+                    IconButton(
+                        modifier = Modifier.semantics { contentDescription = "添加模型服务" },
+                        onClick = {
                         val provider = LlmProviderPresets.all.first().createProvider()
                         onLoadCachedModels(provider.id)
                         editing = provider
@@ -122,12 +127,12 @@ fun LlmProviderSettingsScreen(
                             horizontalAlignment = Alignment.CenterHorizontally,
                             verticalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
-                            Text("还没有模型供应商", style = MaterialTheme.typography.titleMedium)
+                            Text("还没有模型服务", style = MaterialTheme.typography.titleMedium)
                             Button(onClick = {
                                 val provider = LlmProviderPresets.all.first().createProvider()
                                 onLoadCachedModels(provider.id)
                                 editing = provider
-                            }) { Text("添加供应商") }
+                            }) { Text("添加服务") }
                         }
                     }
                 }
@@ -173,7 +178,7 @@ fun LlmProviderSettingsScreen(
     deleting?.let { provider ->
         AlertDialog(
             onDismissRequest = { deleting = null },
-            title = { Text("删除供应商？") },
+            title = { Text("删除模型服务？") },
             text = { Text("将删除“${provider.name}”及其本地模型缓存。已有总结不会被删除。") },
             confirmButton = {
                 TextButton(onClick = {
@@ -186,8 +191,9 @@ fun LlmProviderSettingsScreen(
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun LlmProviderCard(
+internal fun LlmProviderCard(
     provider: LlmServiceConfig,
     active: Boolean,
     canMoveUp: Boolean,
@@ -203,6 +209,7 @@ private fun LlmProviderCard(
 ) {
     var menuOpen by remember { mutableStateOf(false) }
     Surface(
+        onClick = onEdit,
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(8.dp),
         color = if (active) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainer,
@@ -221,13 +228,19 @@ private fun LlmProviderCard(
                     Text("${provider.protocol.displayName} · ${provider.model}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Text(provider.baseUrl, maxLines = 1, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
+                IconButton(onClick = onEdit) {
+                    DoodleIcon(DoodleIconType.Edit, "编辑模型服务：${provider.name}", Modifier.size(24.dp), MaterialTheme.colorScheme.primary)
+                }
             }
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
-                if (!active) ProviderIconButton(LlmActionIconType.Activate, "设为默认", onActivate)
-                ProviderIconButton(LlmActionIconType.Test, "测试连接", onTest, enabled = !testing)
-                ProviderIconButton(LlmActionIconType.Edit, "编辑供应商", onEdit)
+            FlowRow(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End,
+                verticalArrangement = Arrangement.Center
+            ) {
+                if (!active) ProviderTextAction(LlmActionIconType.Activate, "设为默认", onActivate)
+                ProviderTextAction(LlmActionIconType.Test, if (testing) "测试中" else "测试连接", onTest, enabled = !testing)
                 Box {
-                    ProviderIconButton(LlmActionIconType.More, "更多操作", { menuOpen = true })
+                    ProviderTextAction(LlmActionIconType.More, "更多", { menuOpen = true })
                     DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
                         ProviderMenuItem(LlmActionIconType.Duplicate, "复制", onDuplicate) { menuOpen = false }
                         ProviderMenuItem(LlmActionIconType.MoveUp, "上移", onMoveUp, canMoveUp) { menuOpen = false }
@@ -241,9 +254,14 @@ private fun LlmProviderCard(
 }
 
 @Composable
-private fun ProviderIconButton(type: LlmActionIconType, description: String, onClick: () -> Unit, enabled: Boolean = true) {
-    IconButton(onClick = onClick, enabled = enabled) {
-        LlmActionIcon(type, if (enabled) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.outline, Modifier.padding(13.dp))
+private fun ProviderTextAction(type: LlmActionIconType, label: String, onClick: () -> Unit, enabled: Boolean = true) {
+    TextButton(onClick = onClick, enabled = enabled) {
+        LlmActionIcon(
+            type,
+            if (enabled) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.outline,
+            Modifier.size(18.dp)
+        )
+        Text(label, modifier = Modifier.padding(start = 6.dp))
     }
 }
 
@@ -268,7 +286,7 @@ private fun ProviderMenuItem(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun LlmProviderEditorDialog(
+internal fun LlmProviderEditorDialog(
     initial: LlmServiceConfig,
     isNew: Boolean,
     models: List<String>,
@@ -284,7 +302,7 @@ private fun LlmProviderEditorDialog(
     var modelsExpanded by remember { mutableStateOf(false) }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(if (isNew) "添加供应商" else "供应商配置") },
+            title = { Text(if (isNew) "添加模型服务" else "编辑模型服务") },
         text = {
             Column(
                 Modifier.fillMaxWidth().heightIn(max = 560.dp).verticalScroll(rememberScrollState()),
@@ -294,9 +312,16 @@ private fun LlmProviderEditorDialog(
                     OutlinedTextField(
                         value = LlmProviderPresets.find(draft.presetId)?.displayName ?: "自定义",
                         onValueChange = {}, readOnly = true,
-                        modifier = Modifier.fillMaxWidth().menuAnchor(),
+                        modifier = Modifier.fillMaxWidth().menuAnchor(MenuAnchorType.PrimaryNotEditable),
                         label = { Text("预设") },
-                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(presetExpanded) }
+                        trailingIcon = {
+                            DoodleIcon(
+                                if (presetExpanded) DoodleIconType.Collapse else DoodleIconType.Expand,
+                                null,
+                                Modifier.size(20.dp),
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
                     )
                     ExposedDropdownMenu(expanded = presetExpanded, onDismissRequest = { presetExpanded = false }) {
                         LlmProviderPresets.all.forEach { preset ->
@@ -312,8 +337,15 @@ private fun LlmProviderEditorDialog(
                 ExposedDropdownMenuBox(expanded = protocolExpanded, onExpandedChange = { protocolExpanded = it }) {
                     OutlinedTextField(
                         value = draft.protocol.displayName, onValueChange = {}, readOnly = true,
-                        modifier = Modifier.fillMaxWidth().menuAnchor(), label = { Text("接口协议") },
-                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(protocolExpanded) }
+                        modifier = Modifier.fillMaxWidth().menuAnchor(MenuAnchorType.PrimaryNotEditable), label = { Text("接口协议") },
+                        trailingIcon = {
+                            DoodleIcon(
+                                if (protocolExpanded) DoodleIconType.Collapse else DoodleIconType.Expand,
+                                null,
+                                Modifier.size(20.dp),
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
                     )
                     ExposedDropdownMenu(expanded = protocolExpanded, onDismissRequest = { protocolExpanded = false }) {
                         LlmProtocol.entries.forEach { protocol ->
@@ -332,29 +364,6 @@ private fun LlmProviderEditorDialog(
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri)
                 )
-                Box {
-                    OutlinedTextField(
-                        draft.model,
-                        { draft = draft.copy(model = it) },
-                        Modifier.fillMaxWidth(),
-                        label = { Text("模型") },
-                        singleLine = true,
-                        trailingIcon = {
-                            IconButton(onClick = { onFetchModels(draft) }, enabled = !isFetching) {
-                                if (isFetching) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
-                                else LlmActionIcon(LlmActionIconType.Refresh, MaterialTheme.colorScheme.onSurfaceVariant, Modifier.padding(13.dp))
-                            }
-                        }
-                    )
-                    DropdownMenu(expanded = modelsExpanded && models.isNotEmpty(), onDismissRequest = { modelsExpanded = false }) {
-                        models.forEach { model -> DropdownMenuItem(text = { Text(model) }, onClick = { draft = draft.copy(model = model); modelsExpanded = false }) }
-                    }
-                }
-                if (models.isNotEmpty()) {
-                    OutlinedButton(onClick = { modelsExpanded = true }, modifier = Modifier.fillMaxWidth()) {
-                        Text("从 ${models.size} 个已获取模型中选择")
-                    }
-                }
                 OutlinedTextField(
                     draft.apiKey,
                     { draft = draft.copy(apiKey = it) },
@@ -380,6 +389,42 @@ private fun LlmProviderEditorDialog(
                 }
                 if (draft.allowInsecureHttp) {
                     Text("HTTP 不提供传输加密，API Key 和记录可能被同网络中的其他设备看到。", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+                }
+                val canFetchModels = draft.endpointAllowed &&
+                    (draft.apiKey.isNotBlank() || draft.presetId == "ollama") && !isFetching
+                OutlinedButton(
+                    onClick = { onFetchModels(draft) },
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = canFetchModels
+                ) {
+                    if (isFetching) {
+                        CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
+                    } else {
+                        LlmActionIcon(LlmActionIconType.Refresh, MaterialTheme.colorScheme.primary, Modifier.size(18.dp))
+                    }
+                    Text(if (isFetching) "正在获取模型" else "手动获取模型", modifier = Modifier.padding(start = 8.dp))
+                }
+                Text(
+                    "仅在点击后连接当前服务端点；失败仍可手动填写并保存。",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Box {
+                    OutlinedTextField(
+                        draft.model,
+                        { draft = draft.copy(model = it) },
+                        Modifier.fillMaxWidth(),
+                        label = { Text("模型（可手动填写）") },
+                        singleLine = true
+                    )
+                    DropdownMenu(expanded = modelsExpanded && models.isNotEmpty(), onDismissRequest = { modelsExpanded = false }) {
+                        models.forEach { model -> DropdownMenuItem(text = { Text(model) }, onClick = { draft = draft.copy(model = model); modelsExpanded = false }) }
+                    }
+                }
+                if (models.isNotEmpty()) {
+                    OutlinedButton(onClick = { modelsExpanded = true }, modifier = Modifier.fillMaxWidth()) {
+                        Text("从 ${models.size} 个已获取模型中选择")
+                    }
                 }
                 message?.let { Text(it, color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.bodySmall) }
             }

@@ -1,6 +1,8 @@
 package com.limeday.app.llm
 
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -28,5 +30,17 @@ class LlmConfigTest {
 
         assertTrue(cache.isFresh(now + LlmModelCache.CACHE_TTL_MS - 1))
         assertFalse(cache.isFresh(now + LlmModelCache.CACHE_TTL_MS))
+    }
+
+    @Test
+    fun `same vendor can be saved as multiple independent services`() {
+        val preset = LlmProviderPresets.find("deepseek")!!
+        val personal = preset.createProvider().copy(name = "DeepSeek 个人")
+        val work = preset.createProvider().copy(name = "DeepSeek 工作")
+        val settings = LlmSettings(providers = listOf(personal, work), activeProviderId = work.id)
+
+        assertNotEquals(personal.id, work.id)
+        assertEquals(2, settings.providers.size)
+        assertEquals("DeepSeek 工作", settings.activeProvider?.name)
     }
 }

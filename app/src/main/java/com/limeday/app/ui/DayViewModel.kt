@@ -28,6 +28,7 @@ import com.limeday.app.sync.WebDavSyncCoordinator
 import com.limeday.app.sync.WebDavSyncWorker
 import java.io.ByteArrayOutputStream
 import java.time.LocalDate
+import java.time.YearMonth
 import java.time.temporal.ChronoUnit
 import java.util.UUID
 import kotlinx.coroutines.CancellationException
@@ -67,6 +68,7 @@ data class DayUiState(
     val metadata: AppMetadata? = null,
     val appSettings: AppSettings = AppSettings(),
     val dataMessage: String? = null,
+    val monthTodoStatuses: Map<LocalDate, MonthTodoStatus> = emptyMap(),
     val isLoading: Boolean = true
 ) {
     val completedCount: Int get() = todos.count { it.isCompleted }
@@ -74,6 +76,10 @@ data class DayUiState(
     val progressPercent: Int get() = (progress * 100).toInt()
     val hasReview: Boolean get() = review?.hasContent() == true
     val activeLlmProvider: LlmServiceConfig? get() = llmSettings.activeProvider
+}
+
+data class MonthTodoStatus(val total: Int, val completed: Int) {
+    val allCompleted: Boolean get() = total > 0 && completed == total
 }
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -103,6 +109,7 @@ class DayViewModel(
     private val syncMessage = MutableStateFlow<String?>(null)
     private val metadata = MutableStateFlow<AppMetadata?>(null)
     private val dataMessage = MutableStateFlow<String?>(null)
+    private val monthTodoStatuses = MutableStateFlow<Map<LocalDate, MonthTodoStatus>>(emptyMap())
     private var reviewSaveJob: Job? = null
     private var summaryJob: Job? = null
     private var rangeSummaryJob: Job? = null
@@ -163,7 +170,7 @@ class DayViewModel(
         LocalSettingsState(settings, message)
     }
 
-    val uiState = combine(contentWithLlm, syncState, localSettingsState) { content, sync, local ->
+    val uiState = combine(contentWithLlm, syncState, localSettingsState, monthTodoStatuses) { content, sync, local, monthStatuses ->
         content.copy(
             webDavConfig = sync.config,
             isTestingWebDav = sync.isTesting,
@@ -171,7 +178,8 @@ class DayViewModel(
             syncMessage = sync.message,
             metadata = sync.metadata,
             appSettings = local.settings,
-            dataMessage = local.dataMessage
+            dataMessage = local.dataMessage,
+            monthTodoStatuses = monthStatuses
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), DayUiState())
 
@@ -192,10 +200,20 @@ class DayViewModel(
     fun nextDay() = selectDate(selectedDate.value.plusDays(1))
     fun today() = selectDate(LocalDate.now())
 
-    private fun selectDate(date: LocalDate) {
+    fun selectDate(date: LocalDate) {
         flushReview()
         selectedDate.value = date
         reviewDraft.value = null
+    }
+
+    fun loadMonthTodoStatuses(date: LocalDate) {
+        val month = YearMonth.from(date)
+        viewModelScope.launch {
+            val statuses = repository.todosBetween(month.atDay(1).toString(), month.atEndOfMonth().toString())
+                .groupBy { LocalDate.parse(it.date) }
+                .mapValues { (_, items) -> MonthTodoStatus(items.size, items.count(TodoItem::isCompleted)) }
+            monthTodoStatuses.value = statuses
+        }
     }
 
     fun addTodo(title: String) {
@@ -310,7 +328,7 @@ class DayViewModel(
     fun saveLlmProvider(config: LlmServiceConfig): Boolean {
         val normalized = config.normalized.copy(updatedAt = System.currentTimeMillis())
         val error = when {
-            normalized.name.isBlank() -> "请填写供应商名称"
+            normalized.name.isBlank() -> "请填写模型服务名称"
             !normalized.endpointAllowed -> "接口地址必须使用 HTTPS；本地 HTTP 需单独开启"
             normalized.baseUrl.toHttpUrlOrNull() == null -> "Base URL 格式无效"
             normalized.modelsUrl.isNotBlank() && normalized.modelsUrl.toHttpUrlOrNull() == null -> "模型列表地址格式无效"
@@ -338,14 +356,14 @@ class DayViewModel(
             activeProviderId = current.activeProviderId ?: normalized.id,
             modelCaches = caches
         ))
-        llmProviderMessage.value = "供应商已保存"
+        llmProviderMessage.value = "模型服务已保存"
         return true
     }
 
     fun activateLlmProvider(providerId: String) {
         if (llmSettings.value.providers.none { it.id == providerId }) return
         updateLlmSettings(llmSettings.value.copy(activeProviderId = providerId))
-        llmProviderMessage.value = "默认供应商已切换"
+        llmProviderMessage.value = "默认模型服务已切换"
     }
 
     fun duplicateLlmProvider(provider: LlmServiceConfig) {
@@ -360,7 +378,7 @@ class DayViewModel(
         val index = providers.indexOfFirst { it.id == provider.id }
         providers.add(if (index >= 0) index + 1 else providers.size, copy)
         updateLlmSettings(llmSettings.value.copy(providers = providers))
-        llmProviderMessage.value = "已创建供应商副本"
+        llmProviderMessage.value = "已创建模型服务副本"
     }
 
     fun deleteLlmProvider(provider: LlmServiceConfig) {
@@ -371,7 +389,7 @@ class DayViewModel(
             activeProviderId = active,
             modelCaches = llmSettings.value.modelCaches.filterNot { it.providerId == provider.id }
         ))
-        llmProviderMessage.value = "供应商已删除"
+        llmProviderMessage.value = "模型服务已删除"
     }
 
     fun moveLlmProvider(providerId: String, offset: Int) {
@@ -398,9 +416,11 @@ class DayViewModel(
             runCatching { llmClient.fetchModels(config.normalized) }
                 .onSuccess { models ->
                     fetchedModels.value = models
-                    val cache = LlmModelCache(config.id, models, System.currentTimeMillis())
-                    val caches = llmSettings.value.modelCaches.filterNot { it.providerId == config.id } + cache
-                    updateLlmSettings(llmSettings.value.copy(modelCaches = caches))
+                    if (llmSettings.value.providers.any { it.id == config.id }) {
+                        val cache = LlmModelCache(config.id, models, System.currentTimeMillis())
+                        val caches = llmSettings.value.modelCaches.filterNot { it.providerId == config.id } + cache
+                        updateLlmSettings(llmSettings.value.copy(modelCaches = caches))
+                    }
                     llmProviderMessage.value = if (connectionTest) "连接成功，发现 ${models.size} 个模型" else "已获取 ${models.size} 个模型"
                 }
                 .onFailure { llmProviderMessage.value = it.message ?: "模型列表获取失败，可继续手动填写" }
@@ -440,7 +460,7 @@ class DayViewModel(
     fun generateSummary(instruction: String, providerId: String? = null, modelOverride: String = "") {
         val state = uiState.value
         val provider = resolveProvider(providerId, modelOverride) ?: run {
-            summaryError.value = "请先配置可用的模型供应商"
+            summaryError.value = "请先配置可用的模型服务"
             return
         }
         val review = state.review
@@ -487,7 +507,7 @@ class DayViewModel(
     ) {
         val days = ChronoUnit.DAYS.between(start, end) + 1
         val provider = resolveProvider(providerId, modelOverride) ?: run {
-            rangeSummaryError.value = "请先配置可用的模型供应商"
+            rangeSummaryError.value = "请先配置可用的模型服务"
             return
         }
         if (days !in 1..MAX_RANGE_DAYS) {

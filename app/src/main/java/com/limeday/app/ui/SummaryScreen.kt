@@ -12,15 +12,12 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -44,6 +41,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.limeday.app.data.RangeSummary
 import com.limeday.app.llm.LlmSettings
@@ -61,7 +60,6 @@ private enum class SummaryPeriod(val label: String, val value: String) {
 @Composable
 fun SummaryScreen(
     state: DayUiState,
-    onOpenProviders: () -> Unit,
     onGenerate: (LocalDate, LocalDate, String, String, Boolean, String?, String) -> Unit,
     onCancel: () -> Unit,
     onDelete: (RangeSummary) -> Unit,
@@ -77,14 +75,12 @@ fun SummaryScreen(
     var model by rememberSaveable(selectedProvider?.id) { mutableStateOf(selectedProvider?.model.orEmpty()) }
     var dateTarget by remember { mutableStateOf<DateTarget?>(null) }
     var deleting by remember { mutableStateOf<RangeSummary?>(null) }
+    var expandedSummaryIds by remember { mutableStateOf<Set<String>>(emptySet()) }
 
     Scaffold(
         topBar = {
             TopAppBar(
                 title = { Text("总结") },
-                actions = {
-                    IconButton(onClick = onOpenProviders) { Icon(Icons.Rounded.Settings, contentDescription = "模型服务") }
-                },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background)
             )
         },
@@ -104,7 +100,8 @@ fun SummaryScreen(
                                 period = value
                                 if (value != SummaryPeriod.Custom) dates = periodDates(value, LocalDate.now())
                             },
-                            shape = SegmentedButtonDefaults.itemShape(index, SummaryPeriod.entries.size)
+                            shape = SegmentedButtonDefaults.itemShape(index, SummaryPeriod.entries.size),
+                            icon = {}
                         ) { Text(value.label, maxLines = 1) }
                     }
                 }
@@ -179,7 +176,18 @@ fun SummaryScreen(
                 item { Text("还没有范围总结", color = MaterialTheme.colorScheme.onSurfaceVariant) }
             } else {
                 items(state.rangeSummaries, key = RangeSummary::id) { summary ->
-                    RangeSummaryCard(summary, onDelete = { deleting = summary })
+                    RangeSummaryCard(
+                        summary = summary,
+                        expanded = summary.id in expandedSummaryIds,
+                        onToggle = {
+                            expandedSummaryIds = if (summary.id in expandedSummaryIds) {
+                                expandedSummaryIds - summary.id
+                            } else {
+                                expandedSummaryIds + summary.id
+                            }
+                        },
+                        onDelete = { deleting = summary }
+                    )
                 }
             }
         }
@@ -218,22 +226,34 @@ fun SummaryScreen(
 }
 
 @Composable
-private fun RangeSummaryCard(summary: RangeSummary, onDelete: () -> Unit) {
-    Surface(shape = RoundedCornerShape(8.dp), color = MaterialTheme.colorScheme.surfaceContainer) {
+internal fun RangeSummaryCard(summary: RangeSummary, expanded: Boolean, onToggle: () -> Unit, onDelete: () -> Unit) {
+    Surface(onClick = onToggle, shape = RoundedCornerShape(8.dp), color = MaterialTheme.colorScheme.surfaceContainer) {
         Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
                     Text("${summary.rangeStart} 至 ${summary.rangeEnd}", style = MaterialTheme.typography.titleMedium)
                     Text("${summary.providerName} · ${summary.model}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
-                IconButton(onClick = onDelete) {
-                    LlmActionIcon(LlmActionIconType.Delete, MaterialTheme.colorScheme.error, Modifier.padding(13.dp))
-                }
+                DoodleIcon(
+                    if (expanded) DoodleIconType.Collapse else DoodleIconType.Expand,
+                    if (expanded) "收起总结" else "展开总结",
+                    Modifier.size(22.dp),
+                    MaterialTheme.colorScheme.primary
+                )
             }
-            Text(summary.prompt, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
-            Text(summary.content, style = MaterialTheme.typography.bodyLarge)
-            if (summary.includeExistingSummaries) {
-                Text("生成时包含已有每日总结", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            if (expanded) {
+                Text(summary.prompt, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+                Text(summary.content, style = MaterialTheme.typography.bodyLarge)
+                if (summary.includeExistingSummaries) {
+                    Text("生成时包含已有每日总结", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                    IconButton(onClick = onDelete, modifier = Modifier.semantics { contentDescription = "删除总结" }) {
+                        LlmActionIcon(LlmActionIconType.Delete, MaterialTheme.colorScheme.error, Modifier.padding(13.dp))
+                    }
+                }
+            } else {
+                Text(summary.content, maxLines = 1, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
     }

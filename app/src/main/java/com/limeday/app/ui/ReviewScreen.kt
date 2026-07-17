@@ -13,25 +13,16 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.ArrowBack
-import androidx.compose.material.icons.rounded.Close
-import androidx.compose.material.icons.rounded.Lock
-import androidx.compose.material.icons.rounded.Settings
-import androidx.compose.material.icons.rounded.Star
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -43,7 +34,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -54,8 +44,6 @@ import com.limeday.app.data.TodoItem
 import java.time.format.DateTimeFormatter
 import java.time.LocalDate
 import java.util.Locale
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
 import androidx.compose.animation.core.tween
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -72,7 +60,6 @@ fun ReviewScreen(
     onDuplicateTodo: (TodoItem) -> Unit,
     onDeleteTodo: (TodoItem) -> Unit,
     onRestoreTodo: (TodoItem) -> Unit,
-    onOpenLlmSettings: () -> Unit,
     onGenerateSummary: (String, String?, String) -> Unit,
     onCancelSummary: () -> Unit,
     onClearError: () -> Unit,
@@ -85,27 +72,14 @@ fun ReviewScreen(
     val selectedProvider = state.llmSettings.providers.firstOrNull { it.id == providerId } ?: state.llmSettings.activeProvider
     var model by rememberSaveable(selectedProvider?.id) { mutableStateOf(selectedProvider?.model.orEmpty()) }
     val snackbarHostState = remember { SnackbarHostState() }
-    val scope = rememberCoroutineScope()
     val review = state.review
     val formatter = remember { DateTimeFormatter.ofPattern("M月d日 EEEE", Locale.SIMPLIFIED_CHINESE) }
-    val deleteWithUndo: (TodoItem) -> Unit = { todo ->
-        onDeleteTodo(todo)
-        expandedTodoId = null
-        scope.launch {
-            snackbarHostState.currentSnackbarData?.dismiss()
-            val timeout = launch {
-                delay(5_000)
-                snackbarHostState.currentSnackbarData?.dismiss()
-            }
-            val result = snackbarHostState.showSnackbar(
-                message = "已移入回收站",
-                actionLabel = "撤销",
-                duration = SnackbarDuration.Indefinite
-            )
-            timeout.cancel()
-            if (result == SnackbarResult.ActionPerformed) onRestoreTodo(todo)
-        }
-    }
+    val deleteWithUndo = rememberTodoDeleteWithUndo(
+        snackbarHostState = snackbarHostState,
+        onDelete = onDeleteTodo,
+        onRestore = onRestoreTodo,
+        onDeleted = { expandedTodoId = null }
+    )
 
     DisposableEffect(Unit) { onDispose(onFlushReview) }
 
@@ -120,7 +94,7 @@ fun ReviewScreen(
                 },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "返回")
+                        DoodleIcon(DoodleIconType.Back, "返回", Modifier.size(24.dp), MaterialTheme.colorScheme.onSurface)
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background)
@@ -213,11 +187,8 @@ fun ReviewScreen(
                             model = it.model
                         },
                         onModelChange = { model = it },
-                        onConfigure = onOpenLlmSettings,
                         onToggleFavorite = onToggleFavorite,
-                        onGenerate = {
-                            if (state.llmSettings.isConfigured) onGenerateSummary(instruction, providerId, model) else onOpenLlmSettings()
-                        },
+                        onGenerate = { onGenerateSummary(instruction, providerId, model) },
                         onCancel = onCancelSummary,
                         onClearError = onClearError
                     )
@@ -271,7 +242,6 @@ private fun SummaryPanel(
     onInstructionChange: (String) -> Unit,
     onProviderSelected: (com.limeday.app.llm.LlmServiceConfig) -> Unit,
     onModelChange: (String) -> Unit,
-    onConfigure: () -> Unit,
     onToggleFavorite: (String) -> Unit,
     onGenerate: () -> Unit,
     onCancel: () -> Unit,
@@ -284,14 +254,11 @@ private fun SummaryPanel(
     ) {
         Column(Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Rounded.Star, contentDescription = null, tint = MaterialTheme.colorScheme.secondary)
+                DoodleIcon(DoodleIconType.Summary, null, Modifier.size(24.dp), MaterialTheme.colorScheme.secondary)
                 Text("智能总结", modifier = Modifier.weight(1f).padding(start = 10.dp), style = MaterialTheme.typography.titleLarge)
-                IconButton(onClick = onConfigure) {
-                    Icon(Icons.Rounded.Settings, contentDescription = "配置模型")
-                }
             }
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Icon(Icons.Rounded.Lock, contentDescription = null, modifier = Modifier.size(16.dp))
+                DoodleIcon(DoodleIconType.Lock, null, Modifier.size(16.dp), MaterialTheme.colorScheme.onSecondaryContainer)
                 Text(
                     state.activeLlmProvider?.let { "默认使用 ${it.name} · ${it.model}" } ?: "尚未配置模型服务",
                     style = MaterialTheme.typography.bodyMedium,
@@ -317,20 +284,33 @@ private fun SummaryPanel(
                 Surface(shape = RoundedCornerShape(10.dp), color = MaterialTheme.colorScheme.errorContainer) {
                     Row(Modifier.fillMaxWidth().padding(start = 14.dp, top = 8.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                         Text(error, modifier = Modifier.weight(1f), color = MaterialTheme.colorScheme.onErrorContainer)
-                        IconButton(onClick = onClearError) { Icon(Icons.Rounded.Close, contentDescription = "关闭错误") }
+                        IconButton(onClick = onClearError) {
+                            DoodleIcon(DoodleIconType.Close, "关闭错误", Modifier.size(22.dp), MaterialTheme.colorScheme.onErrorContainer)
+                        }
                     }
                 }
             }
             if (state.isGeneratingSummary) {
                 OutlinedButton(onClick = onCancel, modifier = Modifier.align(Alignment.End).heightIn(min = 48.dp)) {
-                    Icon(Icons.Rounded.Close, contentDescription = null)
+                    DoodleIcon(DoodleIconType.Close, null, Modifier.size(20.dp), MaterialTheme.colorScheme.primary)
                     Text("取消生成", modifier = Modifier.padding(start = 8.dp))
                 }
             } else {
-                Button(onClick = onGenerate, modifier = Modifier.align(Alignment.End).heightIn(min = 48.dp)) {
-                    Icon(Icons.Rounded.Star, contentDescription = null)
+                Button(
+                    onClick = onGenerate,
+                    enabled = state.llmSettings.isConfigured,
+                    modifier = Modifier.align(Alignment.End).heightIn(min = 48.dp)
+                ) {
+                    DoodleIcon(DoodleIconType.Summary, null, Modifier.size(20.dp), MaterialTheme.colorScheme.onPrimary)
                     Text(if (state.summary == null) "生成总结" else "重新生成", modifier = Modifier.padding(start = 8.dp))
                 }
+            }
+            if (!state.llmSettings.isConfigured) {
+                Text(
+                    "请先到“设置 → 总结设置 → 模型服务”添加服务。",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error
+                )
             }
             Text(
                 "生成时，当日待办与复盘会发送给本次选择的模型服务商。",

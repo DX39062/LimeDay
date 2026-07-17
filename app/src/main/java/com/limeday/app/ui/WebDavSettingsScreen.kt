@@ -11,16 +11,9 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.ArrowBack
-import androidx.compose.material.icons.rounded.Check
-import androidx.compose.material.icons.rounded.CheckCircle
-import androidx.compose.material.icons.rounded.Delete
-import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -64,7 +57,7 @@ fun WebDavSettingsScreen(
                 title = { Text("WebDAV 同步") },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "返回")
+                        DoodleIcon(DoodleIconType.Back, "返回", Modifier.size(24.dp), MaterialTheme.colorScheme.onSurface)
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background)
@@ -134,11 +127,11 @@ fun WebDavSettingsScreen(
                         enabled = !state.isTestingWebDav
                     ) {
                         if (state.isTestingWebDav) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
-                        else Icon(Icons.Rounded.CheckCircle, contentDescription = null)
+                        else DoodleIcon(DoodleIconType.Check, null, Modifier.size(20.dp), MaterialTheme.colorScheme.primary)
                         Text("测试", modifier = Modifier.padding(start = 8.dp))
                     }
                     Button(onClick = { onSave(draft) }, modifier = Modifier.weight(1f)) {
-                        Icon(Icons.Rounded.Check, contentDescription = null)
+                        DoodleIcon(DoodleIconType.Check, null, Modifier.size(20.dp), MaterialTheme.colorScheme.onPrimary)
                         Text("保存", modifier = Modifier.padding(start = 8.dp))
                     }
                 }
@@ -150,7 +143,7 @@ fun WebDavSettingsScreen(
                     enabled = !state.isSyncing
                 ) {
                     if (state.isSyncing) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
-                    else Icon(Icons.Rounded.Refresh, contentDescription = null)
+                    else DoodleIcon(DoodleIconType.Refresh, null, Modifier.size(20.dp), MaterialTheme.colorScheme.onPrimary)
                     Text(if (state.isSyncing) "正在同步" else "立即同步", modifier = Modifier.padding(start = 8.dp))
                 }
             }
@@ -173,7 +166,7 @@ fun WebDavSettingsScreen(
             if (state.webDavConfig.isConfigured) {
                 item {
                     TextButton(onClick = onClear, modifier = Modifier.fillMaxWidth()) {
-                        Icon(Icons.Rounded.Delete, contentDescription = null)
+                        DoodleIcon(DoodleIconType.Trash, null, Modifier.size(20.dp), MaterialTheme.colorScheme.error)
                         Text("清除 WebDAV 配置", modifier = Modifier.padding(start = 8.dp))
                     }
                 }

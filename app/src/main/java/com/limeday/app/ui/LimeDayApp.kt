@@ -6,10 +6,6 @@ import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.CheckCircle
-import androidx.compose.material.icons.rounded.Star
-import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
@@ -36,7 +32,7 @@ fun LimeDayApp(
     val navController = rememberNavController()
     val backStackEntry by navController.currentBackStackEntryAsState()
     val route = backStackEntry?.destination?.route ?: "day"
-    val mainRoutes = setOf("day", "summary")
+    val mainRoutes = setOf("day", "summary", "settings")
 
     Scaffold(
         bottomBar = {
@@ -51,7 +47,7 @@ fun LimeDayApp(
                                 restoreState = true
                             }
                         },
-                        icon = { Icon(Icons.Rounded.CheckCircle, contentDescription = null) },
+                        icon = { NavigationDoodleIcon(DoodleIconType.Todo, route == "day", "待办") },
                         label = { Text("待办") }
                     )
                     NavigationBarItem(
@@ -63,8 +59,20 @@ fun LimeDayApp(
                                 restoreState = true
                             }
                         },
-                        icon = { Icon(Icons.Rounded.Star, contentDescription = null) },
+                        icon = { NavigationDoodleIcon(DoodleIconType.Summary, route == "summary", "总结") },
                         label = { Text("总结") }
+                    )
+                    NavigationBarItem(
+                        selected = route == "settings",
+                        onClick = {
+                            navController.navigate("settings") {
+                                popUpTo(navController.graph.findStartDestination().id) { saveState = true }
+                                launchSingleTop = true
+                                restoreState = true
+                            }
+                        },
+                        icon = { NavigationDoodleIcon(DoodleIconType.Settings, route == "settings", "设置") },
+                        label = { Text("设置") }
                     )
                 }
             }
@@ -94,13 +102,13 @@ fun LimeDayApp(
                     onDeleteTodo = viewModel::deleteTodo,
                     onRestoreTodo = viewModel::restoreTodo,
                     onOpenReview = { navController.navigate("review") },
-                    onOpenSettings = { navController.navigate("settings") }
+                    onSelectDate = viewModel::selectDate,
+                    onLoadMonth = viewModel::loadMonthTodoStatuses
                 )
             }
             composable("summary") {
                 SummaryScreen(
                     state = state,
-                    onOpenProviders = { navController.navigate("llm-providers") },
                     onGenerate = viewModel::generateRangeSummary,
                     onCancel = viewModel::cancelRangeSummary,
                     onDelete = viewModel::deleteRangeSummary,
@@ -121,7 +129,6 @@ fun LimeDayApp(
                     onDuplicateTodo = viewModel::duplicateTodo,
                     onDeleteTodo = viewModel::deleteTodo,
                     onRestoreTodo = viewModel::restoreTodo,
-                    onOpenLlmSettings = { navController.navigate("llm-providers") },
                     onGenerateSummary = viewModel::generateSummary,
                     onCancelSummary = viewModel::cancelSummary,
                     onClearError = viewModel::clearSummaryError,
@@ -131,7 +138,6 @@ fun LimeDayApp(
             composable("settings") {
                 SettingsScreen(
                     state = state,
-                    onBack = navController::popBackStack,
                     notificationPermissionGranted = notificationPermissionGranted,
                     onRequestNotificationPermission = onRequestNotificationPermission,
                     onSetThemeMode = viewModel::setThemeMode,
