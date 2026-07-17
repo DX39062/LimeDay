@@ -1,6 +1,8 @@
 package com.limeday.app.ui
 
 import android.app.Application
+import android.net.Uri
+import java.io.ByteArrayOutputStream
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
@@ -12,6 +14,10 @@ import com.limeday.app.data.TodoItem
 import com.limeday.app.llm.LlmClient
 import com.limeday.app.llm.LlmConfig
 import com.limeday.app.llm.SecureLlmConfigStore
+import com.limeday.app.settings.AppSettings
+import com.limeday.app.settings.AppSettingsStore
+import com.limeday.app.settings.DailyReminderWorker
+import com.limeday.app.settings.ThemeMode
 import com.limeday.app.sync.SecureWebDavConfigStore
 import com.limeday.app.sync.WebDavClient
 import com.limeday.app.sync.WebDavConfig
@@ -20,6 +26,7 @@ import com.limeday.app.sync.WebDavSyncWorker
 import java.time.LocalDate
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -28,6 +35,7 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 data class DayUiState(
     val selectedDate: LocalDate = LocalDate.now(),
@@ -42,6 +50,8 @@ data class DayUiState(
     val isSyncing: Boolean = false,
     val syncMessage: String? = null,
     val metadata: AppMetadata? = null,
+    val appSettings: AppSettings = AppSettings(),
+    val dataMessage: String? = null,
     val isLoading: Boolean = true
 ) {
     val completedCount: Int get() = todos.count { it.isCompleted }
@@ -58,6 +68,7 @@ class DayViewModel(
     private val webDavConfigStore: SecureWebDavConfigStore,
     private val webDavClient: WebDavClient,
     private val syncCoordinator: WebDavSyncCoordinator,
+    private val appSettingsStore: AppSettingsStore,
     private val application: Application
 ) : ViewModel() {
     private val selectedDate = MutableStateFlow(LocalDate.now())
@@ -70,6 +81,7 @@ class DayViewModel(
     private val isSyncing = MutableStateFlow(false)
     private val syncMessage = MutableStateFlow<String?>(null)
     private val metadata = MutableStateFlow<AppMetadata?>(null)
+    private val dataMessage = MutableStateFlow<String?>(null)
     private var reviewSaveJob: Job? = null
     private var summaryJob: Job? = null
     private var reviewDirty = false
@@ -112,16 +124,24 @@ class DayViewModel(
         )
     }
 
+    private val localSettingsState = combine(
+        appSettingsStore.settings,
+        dataMessage
+    ) { settings, message -> LocalSettingsState(settings, message) }
+
     val uiState = combine(
         contentState,
         isSyncing,
         syncMessage,
-        metadata
-    ) { content, syncing, message, meta ->
+        metadata,
+        localSettingsState
+    ) { content, syncing, message, meta, localSettings ->
         content.copy(
             isSyncing = syncing,
             syncMessage = message,
-            metadata = meta
+            metadata = meta,
+            appSettings = localSettings.settings,
+            dataMessage = localSettings.dataMessage
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), DayUiState())
 
@@ -167,6 +187,72 @@ class DayViewModel(
 
     fun deleteTodo(todo: TodoItem) {
         viewModelScope.launch { repository.deleteTodo(todo) }
+    }
+
+    fun restoreTodo(todo: TodoItem) {
+        viewModelScope.launch { repository.restoreTodo(todo) }
+    }
+
+    fun setThemeMode(mode: ThemeMode) {
+        appSettingsStore.setThemeMode(mode)
+    }
+
+    fun setTodoReminder(enabled: Boolean, hour: Int, minute: Int) {
+        appSettingsStore.setTodoReminder(enabled, hour, minute)
+        DailyReminderWorker.scheduleAll(application, appSettingsStore.settings.value)
+    }
+
+    fun setReviewReminder(enabled: Boolean, hour: Int, minute: Int) {
+        appSettingsStore.setReviewReminder(enabled, hour, minute)
+        DailyReminderWorker.scheduleAll(application, appSettingsStore.settings.value)
+    }
+
+    fun exportData(uri: Uri) {
+        viewModelScope.launch {
+            dataMessage.value = null
+            runCatching {
+                val value = repository.exportJson()
+                withContext(Dispatchers.IO) {
+                    application.contentResolver.openOutputStream(uri, "wt")?.bufferedWriter()?.use { it.write(value) }
+                        ?: error("无法写入所选文件")
+                }
+            }.onSuccess {
+                dataMessage.value = "数据已导出，备份不包含密码和 API Key"
+            }.onFailure {
+                dataMessage.value = it.message ?: "数据导出失败"
+            }
+        }
+    }
+
+    fun importData(uri: Uri) {
+        viewModelScope.launch {
+            dataMessage.value = null
+            runCatching {
+                val value = withContext(Dispatchers.IO) {
+                    val bytes = application.contentResolver.openInputStream(uri)?.use { input ->
+                        val output = ByteArrayOutputStream()
+                        val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+                        while (true) {
+                            val count = input.read(buffer)
+                            if (count < 0) break
+                            require(output.size() + count <= MAX_BACKUP_BYTES) { "备份文件过大" }
+                            output.write(buffer, 0, count)
+                        }
+                        output.toByteArray()
+                    } ?: error("无法读取所选文件")
+                    bytes.toString(Charsets.UTF_8)
+                }
+                repository.importJson(value)
+            }.onSuccess {
+                dataMessage.value = "数据导入完成，已按更新时间合并"
+            }.onFailure {
+                dataMessage.value = it.message ?: "数据导入失败"
+            }
+        }
+    }
+
+    fun clearDataMessage() {
+        dataMessage.value = null
     }
 
     fun updateReview(transform: (DailyReview) -> DailyReview) {
@@ -340,6 +426,15 @@ class DayViewModel(
         val webDavConfig: WebDavConfig,
         val isTestingWebDav: Boolean
     )
+
+    private data class LocalSettingsState(
+        val settings: AppSettings,
+        val dataMessage: String?
+    )
+
+    companion object {
+        private const val MAX_BACKUP_BYTES = 10_000_000
+    }
 }
 
 class DayViewModelFactory(
@@ -349,6 +444,7 @@ class DayViewModelFactory(
     private val webDavConfigStore: SecureWebDavConfigStore,
     private val webDavClient: WebDavClient,
     private val syncCoordinator: WebDavSyncCoordinator,
+    private val appSettingsStore: AppSettingsStore,
     private val application: Application
 ) : ViewModelProvider.Factory {
     @Suppress("UNCHECKED_CAST")
@@ -359,6 +455,7 @@ class DayViewModelFactory(
         webDavConfigStore,
         webDavClient,
         syncCoordinator,
+        appSettingsStore,
         application
     ) as T
 }

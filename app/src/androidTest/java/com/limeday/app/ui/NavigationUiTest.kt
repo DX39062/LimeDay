@@ -3,6 +3,7 @@ package com.limeday.app.ui
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollToNode
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -24,7 +25,15 @@ class NavigationUiTest {
         composeRule.onNodeWithTag("review_entry").performClick()
 
         composeRule.onNodeWithTag("review_screen").assertExists()
+        composeRule.onNodeWithTag("review_todos").assertExists()
         composeRule.onNodeWithTag("review_screen").performScrollToNode(hasTestTag("summary_panel"))
         composeRule.onNodeWithTag("summary_panel", useUnmergedTree = true).assertExists()
+    }
+
+    @Test
+    fun settingsEntryOpensCommonSettingsScreen() {
+        composeRule.onNodeWithContentDescription("设置").performClick()
+
+        composeRule.onNodeWithTag("settings_screen").assertExists()
     }
 }

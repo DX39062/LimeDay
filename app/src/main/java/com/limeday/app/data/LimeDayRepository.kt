@@ -49,6 +49,18 @@ class LimeDayRepository(private val database: AppDatabase) {
         )
     }
 
+    suspend fun restoreTodo(todo: TodoItem) {
+        val now = System.currentTimeMillis()
+        dao.upsertTodo(
+            todo.copy(
+                updatedAt = now,
+                deletedAt = null,
+                deviceId = deviceId(),
+                revision = todo.revision + 2
+            )
+        )
+    }
+
     suspend fun newReview(date: String): DailyReview = DailyReview(date = date, deviceId = deviceId())
 
     suspend fun saveReview(review: DailyReview) {
@@ -109,6 +121,10 @@ class LimeDayRepository(private val database: AppDatabase) {
         dao.upsertSummaries(merged.summaries)
         merged.copy(generatedAt = System.currentTimeMillis(), deviceId = deviceId())
     }
+
+    suspend fun exportJson(): String = snapshot().toJson()
+
+    suspend fun importJson(value: String): SyncSnapshot = merge(SyncSnapshot.fromJson(value))
 
     suspend fun recordSync(status: String, time: Long = System.currentTimeMillis()) {
         val metadata = ensureMetadata()

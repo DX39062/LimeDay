@@ -42,6 +42,8 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -51,6 +53,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -69,6 +72,7 @@ import com.limeday.app.data.TodoItem
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.util.Locale
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -81,10 +85,17 @@ fun DayScreen(
     onToggleTodo: (TodoItem) -> Unit,
     onUpdateTodo: (TodoItem, String, String) -> Unit,
     onDeleteTodo: (TodoItem) -> Unit,
+    onRestoreTodo: (TodoItem) -> Unit,
     onOpenReview: () -> Unit,
     onOpenSettings: () -> Unit
 ) {
     var editingTodo by remember { mutableStateOf<TodoItem?>(null) }
+    val snackbarHostState = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
+    val deleteWithUndo: (TodoItem) -> Unit = { todo ->
+        onDeleteTodo(todo)
+        scope.launch { snackbarHostState.showTodoDeleted(todo, onRestoreTodo) }
+    }
 
     Scaffold(
         topBar = {
@@ -103,6 +114,7 @@ fun DayScreen(
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background)
             )
         },
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         containerColor = MaterialTheme.colorScheme.background
     ) { innerPadding ->
         if (state.isLoading) {
@@ -122,11 +134,11 @@ fun DayScreen(
                     item { EmptyTodos() }
                 } else {
                     items(state.todos, key = TodoItem::id) { todo ->
-                        TodoRow(
+                        SwipeTodoRow(
                             todo = todo,
                             onToggle = { onToggleTodo(todo) },
                             onEdit = { editingTodo = todo },
-                            onDelete = { onDeleteTodo(todo) }
+                            onDelete = { deleteWithUndo(todo) }
                         )
                     }
                 }
@@ -141,6 +153,10 @@ fun DayScreen(
             onDismiss = { editingTodo = null },
             onSave = { title, note ->
                 onUpdateTodo(todo, title, note)
+                editingTodo = null
+            },
+            onDelete = {
+                deleteWithUndo(todo)
                 editingTodo = null
             }
         )
@@ -259,49 +275,6 @@ private fun EmptyTodos() {
 }
 
 @Composable
-private fun TodoRow(todo: TodoItem, onToggle: () -> Unit, onEdit: () -> Unit, onDelete: () -> Unit) {
-    Column {
-        Row(
-            modifier = Modifier.fillMaxWidth().clickable(onClick = onEdit).padding(vertical = 4.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            IconButton(
-                onClick = onToggle,
-                modifier = Modifier.semantics {
-                    contentDescription = if (todo.isCompleted) "标记为未完成：${todo.title}" else "标记为完成：${todo.title}"
-                    role = Role.Checkbox
-                }
-            ) {
-                Box(
-                    Modifier.size(24.dp).border(2.dp, MaterialTheme.colorScheme.primary, CircleShape),
-                    contentAlignment = Alignment.Center
-                ) {
-                    if (todo.isCompleted) Icon(Icons.Rounded.Check, contentDescription = null, modifier = Modifier.size(17.dp))
-                }
-            }
-            Column(Modifier.weight(1f).padding(horizontal = 4.dp, vertical = 8.dp)) {
-                Text(
-                    todo.title,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                    textDecoration = if (todo.isCompleted) TextDecoration.LineThrough else null,
-                    color = if (todo.isCompleted) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface
-                )
-                if (todo.note.isNotBlank()) {
-                    Spacer(Modifier.height(3.dp))
-                    Text(todo.note, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-            }
-            Icon(Icons.Rounded.Edit, contentDescription = null, modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
-            IconButton(onClick = onDelete) {
-                Icon(Icons.Rounded.Delete, contentDescription = "删除待办：${todo.title}")
-            }
-        }
-        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = .65f))
-    }
-}
-
-@Composable
 private fun ReviewEntry(state: DayUiState, onOpenReview: () -> Unit) {
     Surface(
         onClick = onOpenReview,
@@ -330,22 +303,4 @@ private fun ReviewEntry(state: DayUiState, onOpenReview: () -> Unit) {
             Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, contentDescription = null, modifier = Modifier.size(20.dp))
         }
     }
-}
-
-@Composable
-private fun TodoEditor(todo: TodoItem, onDismiss: () -> Unit, onSave: (String, String) -> Unit) {
-    var title by remember(todo.id) { mutableStateOf(todo.title) }
-    var note by remember(todo.id) { mutableStateOf(todo.note) }
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("编辑待办") },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                OutlinedTextField(title, { title = it.take(80) }, label = { Text("标题") }, singleLine = true)
-                OutlinedTextField(note, { note = it.take(300) }, label = { Text("备注（可选）") }, minLines = 2, maxLines = 4)
-            }
-        },
-        confirmButton = { Button(onClick = { onSave(title, note) }, enabled = title.isNotBlank()) { Text("保存") } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } }
-    )
 }

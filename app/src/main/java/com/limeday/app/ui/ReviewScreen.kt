@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -28,6 +29,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -38,6 +41,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -47,9 +51,11 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import com.limeday.app.data.DailyReview
+import com.limeday.app.data.TodoItem
 import com.limeday.app.llm.LlmConfig
 import java.time.format.DateTimeFormatter
 import java.util.Locale
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -58,6 +64,10 @@ fun ReviewScreen(
     onBack: () -> Unit,
     onUpdateReview: ((DailyReview) -> DailyReview) -> Unit,
     onFlushReview: () -> Unit,
+    onToggleTodo: (TodoItem) -> Unit,
+    onUpdateTodo: (TodoItem, String, String) -> Unit,
+    onDeleteTodo: (TodoItem) -> Unit,
+    onRestoreTodo: (TodoItem) -> Unit,
     onSaveLlmConfig: (LlmConfig) -> Unit,
     onClearLlmConfig: () -> Unit,
     onGenerateSummary: () -> Unit,
@@ -65,6 +75,13 @@ fun ReviewScreen(
     onClearError: () -> Unit
 ) {
     var showLlmSettings by remember { mutableStateOf(false) }
+    var editingTodo by remember { mutableStateOf<TodoItem?>(null) }
+    val snackbarHostState = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
+    val deleteWithUndo: (TodoItem) -> Unit = { todo ->
+        onDeleteTodo(todo)
+        scope.launch { snackbarHostState.showTodoDeleted(todo, onRestoreTodo) }
+    }
     val review = state.review
     val formatter = remember { DateTimeFormatter.ofPattern("M月d日 EEEE", Locale.SIMPLIFIED_CHINESE) }
 
@@ -87,6 +104,7 @@ fun ReviewScreen(
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background)
             )
         },
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         containerColor = MaterialTheme.colorScheme.background
     ) { innerPadding ->
         if (review == null) {
@@ -104,6 +122,38 @@ fun ReviewScreen(
                         "把今天留下来",
                         style = MaterialTheme.typography.headlineLarge
                     )
+                }
+                item {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.Bottom
+                    ) {
+                        Text("今日待办", modifier = Modifier.testTag("review_todos"), style = MaterialTheme.typography.headlineSmall)
+                        Text(
+                            "${state.completedCount} / ${state.todos.size} 已完成",
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                }
+                if (state.todos.isEmpty()) {
+                    item {
+                        Text(
+                            "这一天还没有待办",
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                } else {
+                    items(state.todos, key = TodoItem::id) { todo ->
+                        SwipeTodoRow(
+                            todo = todo,
+                            onToggle = { onToggleTodo(todo) },
+                            onEdit = { editingTodo = todo },
+                            onDelete = { deleteWithUndo(todo) }
+                        )
+                    }
                 }
                 item { ReviewField("今天最值得记住的亮点", review.highlight) { value -> onUpdateReview { it.copy(highlight = value) } } }
                 item { ReviewField("遇到了什么困难？", review.challenge) { value -> onUpdateReview { it.copy(challenge = value) } } }
@@ -136,6 +186,21 @@ fun ReviewScreen(
             onSave = {
                 onSaveLlmConfig(it)
                 showLlmSettings = false
+            }
+        )
+    }
+
+    editingTodo?.let { todo ->
+        TodoEditor(
+            todo = todo,
+            onDismiss = { editingTodo = null },
+            onSave = { title, note ->
+                onUpdateTodo(todo, title, note)
+                editingTodo = null
+            },
+            onDelete = {
+                deleteWithUndo(todo)
+                editingTodo = null
             }
         )
     }

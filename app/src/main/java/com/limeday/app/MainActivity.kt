@@ -1,35 +1,84 @@
 package com.limeday.app
 
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.core.content.ContextCompat
+import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.limeday.app.ui.DayViewModel
 import com.limeday.app.ui.DayViewModelFactory
 import com.limeday.app.ui.LimeDayApp
 import com.limeday.app.ui.theme.LimeDayTheme
+import java.time.LocalDate
 
 class MainActivity : ComponentActivity() {
+    private var notificationPermissionGranted by mutableStateOf(false)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+
+        val app = application as LimeDayApplication
+        val viewModel = ViewModelProvider(
+            this,
+            DayViewModelFactory(
+                repository = app.repository,
+                llmConfigStore = app.llmConfigStore,
+                llmClient = app.llmClient,
+                webDavConfigStore = app.webDavConfigStore,
+                webDavClient = app.webDavClient,
+                syncCoordinator = app.syncCoordinator,
+                appSettingsStore = app.appSettingsStore,
+                application = app
+            )
+        )[DayViewModel::class.java]
+
+        notificationPermissionGranted = hasNotificationPermission()
+        val notificationPermissionLauncher = registerForActivityResult(
+            ActivityResultContracts.RequestPermission()
+        ) { granted -> notificationPermissionGranted = granted }
+        val exportLauncher = registerForActivityResult(
+            ActivityResultContracts.CreateDocument("application/json")
+        ) { uri -> uri?.let(viewModel::exportData) }
+        val importLauncher = registerForActivityResult(
+            ActivityResultContracts.OpenDocument()
+        ) { uri -> uri?.let(viewModel::importData) }
+
         setContent {
-            LimeDayTheme {
-                val app = application as LimeDayApplication
-                val viewModel: DayViewModel = viewModel(
-                    factory = DayViewModelFactory(
-                        repository = app.repository,
-                        llmConfigStore = app.llmConfigStore,
-                        llmClient = app.llmClient,
-                        webDavConfigStore = app.webDavConfigStore,
-                        webDavClient = app.webDavClient,
-                        syncCoordinator = app.syncCoordinator,
-                        application = app
-                    )
+            val settings by app.appSettingsStore.settings.collectAsStateWithLifecycle()
+            LimeDayTheme(settings.themeMode) {
+                LimeDayApp(
+                    viewModel = viewModel,
+                    notificationPermissionGranted = notificationPermissionGranted,
+                    onRequestNotificationPermission = {
+                        if (Build.VERSION.SDK_INT >= 33 && !hasNotificationPermission()) {
+                            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                        }
+                    },
+                    onRequestExport = {
+                        exportLauncher.launch("LimeDay-backup-${LocalDate.now()}.json")
+                    },
+                    onRequestImport = { importLauncher.launch(arrayOf("application/json", "text/plain")) }
                 )
-                LimeDayApp(viewModel)
             }
         }
     }
+
+    override fun onResume() {
+        super.onResume()
+        notificationPermissionGranted = hasNotificationPermission()
+    }
+
+    private fun hasNotificationPermission(): Boolean =
+        Build.VERSION.SDK_INT < 33 ||
+            ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
 }

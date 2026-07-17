@@ -8,7 +8,13 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 
 @Composable
-fun LimeDayApp(viewModel: DayViewModel) {
+fun LimeDayApp(
+    viewModel: DayViewModel,
+    notificationPermissionGranted: Boolean,
+    onRequestNotificationPermission: () -> Unit,
+    onRequestExport: () -> Unit,
+    onRequestImport: () -> Unit
+) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val navController = rememberNavController()
 
@@ -23,6 +29,7 @@ fun LimeDayApp(viewModel: DayViewModel) {
                 onToggleTodo = viewModel::toggleTodo,
                 onUpdateTodo = viewModel::updateTodo,
                 onDeleteTodo = viewModel::deleteTodo,
+                onRestoreTodo = viewModel::restoreTodo,
                 onOpenReview = { navController.navigate("review") },
                 onOpenSettings = { navController.navigate("settings") }
             )
@@ -33,6 +40,10 @@ fun LimeDayApp(viewModel: DayViewModel) {
                 onBack = navController::popBackStack,
                 onUpdateReview = viewModel::updateReview,
                 onFlushReview = viewModel::flushReview,
+                onToggleTodo = viewModel::toggleTodo,
+                onUpdateTodo = viewModel::updateTodo,
+                onDeleteTodo = viewModel::deleteTodo,
+                onRestoreTodo = viewModel::restoreTodo,
                 onSaveLlmConfig = viewModel::saveLlmConfig,
                 onClearLlmConfig = viewModel::clearLlmConfig,
                 onGenerateSummary = viewModel::generateSummary,
@@ -47,7 +58,15 @@ fun LimeDayApp(viewModel: DayViewModel) {
                 onSave = viewModel::saveWebDavConfig,
                 onClear = viewModel::clearWebDavConfig,
                 onTest = viewModel::testWebDav,
-                onSync = viewModel::syncNow
+                onSync = viewModel::syncNow,
+                notificationPermissionGranted = notificationPermissionGranted,
+                onRequestNotificationPermission = onRequestNotificationPermission,
+                onSetThemeMode = viewModel::setThemeMode,
+                onSetTodoReminder = viewModel::setTodoReminder,
+                onSetReviewReminder = viewModel::setReviewReminder,
+                onRequestExport = onRequestExport,
+                onRequestImport = onRequestImport,
+                onClearDataMessage = viewModel::clearDataMessage
             )
         }
     }

@@ -4,6 +4,8 @@ import com.limeday.app.data.DailyReview
 import com.limeday.app.data.TodoItem
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -58,6 +60,22 @@ class SyncSnapshotTest {
 
         assertEquals(1, merged.reviews.size)
         assertEquals("远端", merged.reviews.single().highlight)
+    }
+
+    @Test
+    fun `backup json contains business data but no credential fields`() {
+        val json = snapshot(todos = listOf(todo(updatedAt = 10))).toJson()
+
+        assertTrue(json.contains("todo-1"))
+        assertFalse(json.contains("password", ignoreCase = true))
+        assertFalse(json.contains("apiKey", ignoreCase = true))
+    }
+
+    @Test
+    fun `unsupported backup format is rejected before merge`() {
+        val invalid = snapshot().toJson().replace("\"formatVersion\":1", "\"formatVersion\":99")
+
+        assertThrows(IllegalArgumentException::class.java) { SyncSnapshot.fromJson(invalid) }
     }
 
     private fun snapshot(
