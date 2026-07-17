@@ -2,6 +2,8 @@ package com.limeday.app.sync
 
 import com.limeday.app.data.DailyReview
 import com.limeday.app.data.TodoItem
+import com.limeday.app.data.TodoPriority
+import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertFalse
@@ -13,7 +15,7 @@ class SyncSnapshotTest {
     @Test
     fun `snapshot json round trip keeps records and tombstones`() {
         val source = snapshot(
-            todos = listOf(todo(id = "todo-1", updatedAt = 20, deletedAt = 20)),
+            todos = listOf(todo(id = "todo-1", updatedAt = 20, deletedAt = 20, priority = TodoPriority.HIGH)),
             reviews = listOf(review(updatedAt = 30))
         )
 
@@ -22,7 +24,28 @@ class SyncSnapshotTest {
         assertEquals(source.deviceId, decoded.deviceId)
         assertEquals("todo-1", decoded.todos.single().id)
         assertNotNull(decoded.todos.single().deletedAt)
+        assertEquals(TodoPriority.HIGH, decoded.todos.single().priority)
         assertEquals("亮点", decoded.reviews.single().highlight)
+    }
+
+    @Test
+    fun `legacy snapshot without priority defaults to normal`() {
+        val json = JSONObject(snapshot(todos = listOf(todo(updatedAt = 10))).toJson())
+        json.getJSONArray("todos").getJSONObject(0).remove("priority")
+
+        val decoded = SyncSnapshot.fromJson(json.toString())
+
+        assertEquals(TodoPriority.NORMAL, decoded.todos.single().priority)
+    }
+
+    @Test
+    fun `out of range priority is normalized`() {
+        val json = JSONObject(snapshot(todos = listOf(todo(updatedAt = 10))).toJson())
+        json.getJSONArray("todos").getJSONObject(0).put("priority", 99)
+
+        val decoded = SyncSnapshot.fromJson(json.toString())
+
+        assertEquals(TodoPriority.HIGH, decoded.todos.single().priority)
     }
 
     @Test
@@ -95,11 +118,13 @@ class SyncSnapshotTest {
         title: String = "待办",
         updatedAt: Long,
         deletedAt: Long? = null,
-        deviceId: String = "device-a"
+        deviceId: String = "device-a",
+        priority: Int = TodoPriority.NORMAL
     ) = TodoItem(
         id = id,
         date = "2026-07-16",
         title = title,
+        priority = priority,
         sortOrder = "1",
         createdAt = 1,
         updatedAt = updatedAt,

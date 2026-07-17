@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
@@ -27,6 +28,10 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -37,6 +42,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -46,7 +52,11 @@ import com.limeday.app.data.DailyReview
 import com.limeday.app.data.TodoItem
 import com.limeday.app.llm.LlmConfig
 import java.time.format.DateTimeFormatter
+import java.time.LocalDate
 import java.util.Locale
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import androidx.compose.animation.core.tween
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -57,7 +67,11 @@ fun ReviewScreen(
     onFlushReview: () -> Unit,
     onToggleTodo: (TodoItem) -> Unit,
     onUpdateTodo: (TodoItem, String, String) -> Unit,
+    onSetTodoPriority: (TodoItem, Int) -> Unit,
+    onMoveTodo: (TodoItem, LocalDate) -> Unit,
+    onDuplicateTodo: (TodoItem) -> Unit,
     onDeleteTodo: (TodoItem) -> Unit,
+    onRestoreTodo: (TodoItem) -> Unit,
     onSaveLlmConfig: (LlmConfig) -> Unit,
     onClearLlmConfig: () -> Unit,
     onGenerateSummary: () -> Unit,
@@ -66,8 +80,29 @@ fun ReviewScreen(
 ) {
     var showLlmSettings by remember { mutableStateOf(false) }
     var editingTodo by remember { mutableStateOf<TodoItem?>(null) }
+    var expandedTodoId by remember { mutableStateOf<String?>(null) }
+    val snackbarHostState = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
     val review = state.review
     val formatter = remember { DateTimeFormatter.ofPattern("M月d日 EEEE", Locale.SIMPLIFIED_CHINESE) }
+    val deleteWithUndo: (TodoItem) -> Unit = { todo ->
+        onDeleteTodo(todo)
+        expandedTodoId = null
+        scope.launch {
+            snackbarHostState.currentSnackbarData?.dismiss()
+            val timeout = launch {
+                delay(5_000)
+                snackbarHostState.currentSnackbarData?.dismiss()
+            }
+            val result = snackbarHostState.showSnackbar(
+                message = "已移入回收站",
+                actionLabel = "撤销",
+                duration = SnackbarDuration.Indefinite
+            )
+            timeout.cancel()
+            if (result == SnackbarResult.ActionPerformed) onRestoreTodo(todo)
+        }
+    }
 
     DisposableEffect(Unit) { onDispose(onFlushReview) }
 
@@ -88,6 +123,7 @@ fun ReviewScreen(
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background)
             )
         },
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         containerColor = MaterialTheme.colorScheme.background
     ) { innerPadding ->
         if (review == null) {
@@ -124,12 +160,20 @@ fun ReviewScreen(
                     }
                 } else {
                     items(state.todos, key = TodoItem::id) { todo ->
-                        SwipeTodoRow(
-                            todo = todo,
-                            onToggle = { onToggleTodo(todo) },
-                            onEdit = { editingTodo = todo },
-                            onDelete = { onDeleteTodo(todo) }
-                        )
+                        Box(Modifier.animateItem(fadeInSpec = tween(180), fadeOutSpec = tween(180), placementSpec = tween(220))) {
+                            SwipeTodoRow(
+                                todo = todo,
+                                expanded = expandedTodoId == todo.id,
+                                anyRowExpanded = expandedTodoId != null,
+                                onExpandedChange = { expanded -> expandedTodoId = if (expanded) todo.id else null },
+                                onToggle = { onToggleTodo(todo) },
+                                onEdit = { editingTodo = todo },
+                                onSetPriority = { onSetTodoPriority(todo, it) },
+                                onMove = { onMoveTodo(todo, it) },
+                                onDuplicate = { onDuplicateTodo(todo) },
+                                onDelete = { deleteWithUndo(todo) }
+                            )
+                        }
                     }
                 }
                 item {
@@ -137,7 +181,8 @@ fun ReviewScreen(
                         label = "解决了什么问题？",
                         value = review.challenge,
                         maxLength = 1000,
-                        minLines = 2
+                        minLines = 4,
+                        maxLines = 8
                     ) { value -> onUpdateReview { it.copy(challenge = value) } }
                 }
                 item {
@@ -145,7 +190,8 @@ fun ReviewScreen(
                         label = "随便写写",
                         value = review.freeWriteText(),
                         maxLength = 3200,
-                        minLines = 4
+                        minLines = 8,
+                        maxLines = 16
                     ) { value ->
                         onUpdateReview {
                             it.withFreeWrite(value)
@@ -191,7 +237,7 @@ fun ReviewScreen(
                 editingTodo = null
             },
             onDelete = {
-                onDeleteTodo(todo)
+                deleteWithUndo(todo)
                 editingTodo = null
             }
         )
@@ -204,6 +250,7 @@ private fun ReviewField(
     value: String,
     maxLength: Int,
     minLines: Int,
+    maxLines: Int,
     onValueChange: (String) -> Unit
 ) {
     OutlinedTextField(
@@ -212,7 +259,7 @@ private fun ReviewField(
         modifier = Modifier.fillMaxWidth(),
         label = { Text(label) },
         minLines = minLines,
-        maxLines = 7,
+        maxLines = maxLines,
         shape = RoundedCornerShape(12.dp)
     )
 }
@@ -260,12 +307,12 @@ private fun SummaryPanel(
                 }
             }
             if (state.isGeneratingSummary) {
-                OutlinedButton(onClick = onCancel, modifier = Modifier.fillMaxWidth()) {
+                OutlinedButton(onClick = onCancel, modifier = Modifier.align(Alignment.End).heightIn(min = 48.dp)) {
                     Icon(Icons.Rounded.Close, contentDescription = null)
                     Text("取消生成", modifier = Modifier.padding(start = 8.dp))
                 }
             } else {
-                Button(onClick = onGenerate, modifier = Modifier.fillMaxWidth()) {
+                Button(onClick = onGenerate, modifier = Modifier.align(Alignment.End).heightIn(min = 48.dp)) {
                     Icon(Icons.Rounded.Star, contentDescription = null)
                     Text(if (state.summary == null) "生成总结" else "重新生成", modifier = Modifier.padding(start = 8.dp))
                 }

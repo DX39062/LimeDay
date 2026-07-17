@@ -10,7 +10,7 @@ import java.util.UUID
 
 @Database(
     entities = [TodoItem::class, DailyReview::class, DailySummary::class, AppMetadata::class],
-    version = 4,
+    version = 5,
     exportSchema = true
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -24,7 +24,7 @@ abstract class AppDatabase : RoomDatabase() {
                 context.applicationContext,
                 AppDatabase::class.java,
                 "lime_day.db"
-            ).addMigrations(MIGRATION_1_4, MIGRATION_2_4, MIGRATION_3_4)
+            ).addMigrations(MIGRATION_1_4, MIGRATION_2_4, MIGRATION_3_4, MIGRATION_4_5)
                 .addCallback(object : Callback() {
                     override fun onCreate(db: SupportSQLiteDatabase) {
                         super.onCreate(db)
@@ -45,6 +45,13 @@ abstract class AppDatabase : RoomDatabase() {
 
         internal val MIGRATION_3_4 = object : Migration(3, 4) {
             override fun migrate(db: SupportSQLiteDatabase) = migrateDrift(db)
+        }
+
+        internal val MIGRATION_4_5 = object : Migration(4, 5) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE todos ADD COLUMN priority INTEGER NOT NULL DEFAULT 1")
+                db.execSQL("UPDATE app_metadata SET schema_version_value = 5 WHERE id = 1")
+            }
         }
 
         private fun migrateRoomLegacy(db: SupportSQLiteDatabase, version: Int) {
@@ -79,7 +86,7 @@ abstract class AppDatabase : RoomDatabase() {
             db.execSQL("DROP TABLE legacy_todos")
             db.execSQL("DROP TABLE legacy_daily_reviews")
             if (version >= 2) db.execSQL("DROP TABLE legacy_daily_summaries")
-            insertMetadata(db, deviceId, version)
+            insertMetadata(db, deviceId, version, schemaVersion = 4)
         }
 
         private fun migrateDrift(db: SupportSQLiteDatabase) {
@@ -117,11 +124,12 @@ abstract class AppDatabase : RoomDatabase() {
         private fun insertMetadata(
             db: SupportSQLiteDatabase,
             deviceId: String = UUID.randomUUID().toString(),
-            legacyVersion: Int
+            legacyVersion: Int,
+            schemaVersion: Int = 5
         ) {
             db.execSQL(
-                "INSERT OR IGNORE INTO app_metadata (id, device_id, schema_version_value, legacy_migration_version, last_sync_status) VALUES (1, ?, 4, ?, '')",
-                arrayOf<Any>(deviceId, legacyVersion)
+                "INSERT OR IGNORE INTO app_metadata (id, device_id, schema_version_value, legacy_migration_version, last_sync_status) VALUES (1, ?, ?, ?, '')",
+                arrayOf<Any>(deviceId, schemaVersion, legacyVersion)
             )
         }
     }

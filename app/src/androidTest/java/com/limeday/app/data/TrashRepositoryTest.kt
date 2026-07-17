@@ -47,4 +47,28 @@ class TrashRepositoryTest {
         assertTrue(repository.observeDeletedTodos().first().isEmpty())
         assertEquals("可恢复待办", repository.observeTodos(date).first().single().title)
     }
+
+    @Test
+    fun priorityMoveAndDuplicatePreserveExpectedFields() = runBlocking {
+        val sourceDate = "2026-07-17"
+        val targetDate = "2026-07-20"
+        repository.addTodo(sourceDate, "安排发布", "保留备注")
+        val source = repository.observeTodos(sourceDate).first().single()
+
+        repository.setTodoPriority(source, TodoPriority.HIGH)
+        val prioritized = repository.observeTodos(sourceDate).first().single()
+        repository.duplicateTodo(prioritized)
+
+        val copied = repository.observeTodos(sourceDate).first().first { it.id != prioritized.id }
+        assertEquals(TodoPriority.HIGH, copied.priority)
+        assertEquals("保留备注", copied.note)
+        assertTrue(!copied.isCompleted)
+
+        repository.moveTodo(prioritized, targetDate)
+
+        val moved = repository.observeTodos(targetDate).first().single()
+        assertEquals(prioritized.id, moved.id)
+        assertEquals(TodoPriority.HIGH, moved.priority)
+        assertTrue(moved.revision > source.revision)
+    }
 }

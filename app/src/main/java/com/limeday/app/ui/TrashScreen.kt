@@ -7,12 +7,12 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
-import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
@@ -35,6 +35,7 @@ import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
+import androidx.compose.animation.core.tween
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -78,7 +79,9 @@ fun TrashScreen(
                     )
                 }
                 items(state.deletedTodos, key = TodoItem::id) { todo ->
-                    TrashTodoRow(todo = todo, onRestore = { onRestore(todo) })
+                    Box(Modifier.animateItem(fadeInSpec = tween(180), fadeOutSpec = tween(180), placementSpec = tween(220))) {
+                        TrashTodoRow(todo = todo, onRestore = { onRestore(todo) })
+                    }
                 }
             }
         }
@@ -100,8 +103,8 @@ private fun TrashTodoRow(todo: TodoItem, onRestore: () -> Unit) {
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
-        Button(onClick = onRestore) {
-            Icon(Icons.Rounded.Refresh, contentDescription = null)
+        Button(onClick = onRestore, modifier = Modifier.heightIn(min = 48.dp)) {
+            TodoRestoreIcon()
             Text("恢复", modifier = Modifier.padding(start = 6.dp))
         }
     }

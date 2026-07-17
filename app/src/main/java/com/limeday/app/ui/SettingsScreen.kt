@@ -219,7 +219,7 @@ fun SettingsScreen(
             item {
                 val context = LocalContext.current
                 val version = remember {
-                    context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: "2.3.0"
+                    context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: "2.4.0"
                 }
                 Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text("青柠日记 $version", style = MaterialTheme.typography.titleMedium)

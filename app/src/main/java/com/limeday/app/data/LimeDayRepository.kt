@@ -34,6 +34,30 @@ class LimeDayRepository(private val database: AppDatabase) {
         dao.upsertTodo(todo.changed().copy(title = title.trim(), note = note.trim()))
     }
 
+    suspend fun setTodoPriority(todo: TodoItem, priority: Int) {
+        dao.upsertTodo(todo.changed().copy(priority = TodoPriority.normalize(priority)))
+    }
+
+    suspend fun moveTodo(todo: TodoItem, date: String) {
+        dao.upsertTodo(todo.changed().copy(date = date))
+    }
+
+    suspend fun duplicateTodo(todo: TodoItem) {
+        val now = System.currentTimeMillis()
+        dao.upsertTodo(
+            TodoItem(
+                date = todo.date,
+                title = todo.title,
+                note = todo.note,
+                priority = TodoPriority.normalize(todo.priority),
+                sortOrder = "%020d-%s".format(now, UUID.randomUUID()),
+                createdAt = now,
+                updatedAt = now,
+                deviceId = deviceId()
+            )
+        )
+    }
+
     suspend fun setTodoCompleted(todo: TodoItem, completed: Boolean) {
         dao.upsertTodo(todo.changed().copy(isCompleted = completed))
     }

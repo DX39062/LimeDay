@@ -6,8 +6,8 @@
 
 ## 下载
 
-- [LimeDay 2.3.0 ARM64 APK](releases/LimeDay-2.3.0-arm64-v8a.apk)
-- SHA-256：`43D6C92A4847CB6A4AFC077FA8CB755BA83CCB665FBD41932100EB772B060551`
+- [LimeDay 2.4.0 ARM64 APK](releases/LimeDay-2.4.0-arm64-v8a.apk)
+- SHA-256：`74161C8B71355B033185A38032066D24D1DCE04BB829A0A67A61E6730C0E08DF`
 
 ## 技术栈
 
@@ -20,15 +20,16 @@
 
 ## 当前能力
 
-- 日期切换、每日待办 CRUD、完成进度
+- 日期切换、每日待办 CRUD、优先级、移动日期、复制和完成进度
 - 双字段每日复盘、旧复盘无损合并、当日待办操作和 500ms 自动保存
-- 待办滑动二次操作、回收站恢复及同步墓碑
+- 可收回的待办左滑操作、删除撤销、回收站恢复及同步墓碑
+- 待办增删、完成、进度和页面切换动效，以及自绘待办操作图标
 - 跟随系统/浅色/深色外观模式和每日待办、复盘提醒
 - JSON 数据导入导出、版本信息和隐私说明
 - OpenAI 兼容、Anthropic、Google Gemini 总结
 - WebDAV 连接测试、首次建目录、双向合并和后台同步
 - WebDAV 独立二级设置页
-- Room v1/v2 与 Flutter/Drift v3 到 Room v4 的非破坏迁移
+- Room v1/v2、Flutter/Drift v3 和 Room v4 到 Room v5 的非破坏迁移
 - 浅色/深色模式、边到边布局和 TalkBack 语义
 
 ## 开发环境

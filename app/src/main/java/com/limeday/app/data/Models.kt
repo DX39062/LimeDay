@@ -13,6 +13,14 @@ interface SyncEntity {
     val revision: Long
 }
 
+object TodoPriority {
+    const val LOW = 0
+    const val NORMAL = 1
+    const val HIGH = 2
+
+    fun normalize(value: Int): Int = value.coerceIn(LOW, HIGH)
+}
+
 @Entity(
     tableName = "todos",
     indices = [Index(value = ["date"], name = "todos_date_idx")]
@@ -23,6 +31,7 @@ data class TodoItem(
     val title: String,
     @ColumnInfo(defaultValue = "''") val note: String = "",
     @ColumnInfo(name = "is_completed", defaultValue = "0") val isCompleted: Boolean = false,
+    @ColumnInfo(defaultValue = "1") val priority: Int = TodoPriority.NORMAL,
     @ColumnInfo(name = "sort_order") val sortOrder: String,
     @ColumnInfo(name = "created_at") val createdAt: Long = System.currentTimeMillis(),
     @ColumnInfo(name = "updated_at") override val updatedAt: Long = createdAt,
@@ -74,7 +83,7 @@ data class DailySummary(
 data class AppMetadata(
     @PrimaryKey @ColumnInfo(defaultValue = "1") val id: Int = 1,
     @ColumnInfo(name = "device_id") val deviceId: String,
-    @ColumnInfo(name = "schema_version_value") val schemaVersionValue: Int = 4,
+    @ColumnInfo(name = "schema_version_value") val schemaVersionValue: Int = 5,
     @ColumnInfo(name = "legacy_migration_version", defaultValue = "0") val legacyMigrationVersion: Int = 0,
     @ColumnInfo(name = "last_sync_at") val lastSyncAt: Long? = null,
     @ColumnInfo(name = "last_sync_status", defaultValue = "''") val lastSyncStatus: String = ""

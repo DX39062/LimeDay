@@ -189,6 +189,18 @@ class DayViewModel(
         viewModelScope.launch { repository.setTodoCompleted(todo, !todo.isCompleted) }
     }
 
+    fun setTodoPriority(todo: TodoItem, priority: Int) {
+        viewModelScope.launch { repository.setTodoPriority(todo, priority) }
+    }
+
+    fun moveTodo(todo: TodoItem, date: LocalDate) {
+        viewModelScope.launch { repository.moveTodo(todo, date.toString()) }
+    }
+
+    fun duplicateTodo(todo: TodoItem) {
+        viewModelScope.launch { repository.duplicateTodo(todo) }
+    }
+
     fun deleteTodo(todo: TodoItem) {
         viewModelScope.launch { repository.deleteTodo(todo) }
     }

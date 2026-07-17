@@ -30,6 +30,7 @@ class DatabaseMigrationTest {
 
         assertEquals("迁移待办", database.limeDayDao().allTodos().single().title)
         assertTrue(database.limeDayDao().allTodos().single().isCompleted)
+        assertEquals(TodoPriority.NORMAL, database.limeDayDao().allTodos().single().priority)
         assertEquals("旧版亮点", database.limeDayDao().allReviews().single().highlight)
         assertTrue(database.limeDayDao().allSummaries().isEmpty())
         assertEquals(1, database.limeDayDao().metadata()?.legacyMigrationVersion)
@@ -49,13 +50,24 @@ class DatabaseMigrationTest {
     }
 
     @Test
-    fun driftV3MigratesToNativeRoomV4() = runBlocking {
+    fun driftV3MigratesToNativeRoomV5() = runBlocking {
         val database = openMigratedDatabase(version = 3)
 
         assertEquals("flutter-id", database.limeDayDao().allTodos().single().id)
         assertEquals(7, database.limeDayDao().allTodos().single().revision)
         assertEquals("flutter-device", database.limeDayDao().metadata()?.deviceId)
-        assertEquals(4, database.limeDayDao().metadata()?.schemaVersionValue)
+        assertEquals(5, database.limeDayDao().metadata()?.schemaVersionValue)
+        assertEquals(TodoPriority.NORMAL, database.limeDayDao().allTodos().single().priority)
+        database.close()
+    }
+
+    @Test
+    fun roomV4AddsNormalPriority() = runBlocking {
+        val database = openMigratedDatabase(version = 4)
+
+        assertEquals("v4-id", database.limeDayDao().allTodos().single().id)
+        assertEquals(TodoPriority.NORMAL, database.limeDayDao().allTodos().single().priority)
+        assertEquals(5, database.limeDayDao().metadata()?.schemaVersionValue)
         database.close()
     }
 
@@ -64,12 +76,17 @@ class DatabaseMigrationTest {
         databaseNames += name
         val file = context.getDatabasePath(name)
         file.parentFile?.mkdirs()
-        if (version <= 2) createRoomLegacy(file, version) else createDriftV3(file)
+        when (version) {
+            1, 2 -> createRoomLegacy(file, version)
+            3 -> createDriftV3(file)
+            4 -> createRoomV4(file)
+        }
         return Room.databaseBuilder(context, AppDatabase::class.java, name)
             .addMigrations(
                 AppDatabase.MIGRATION_1_4,
                 AppDatabase.MIGRATION_2_4,
-                AppDatabase.MIGRATION_3_4
+                AppDatabase.MIGRATION_3_4,
+                AppDatabase.MIGRATION_4_5
             )
             .build()
             .also { it.openHelper.writableDatabase }
@@ -104,6 +121,21 @@ class DatabaseMigrationTest {
             db.execSQL("INSERT INTO daily_summaries VALUES ('summary-id', '2026-07-16', '总结', 'provider', 'model', 2000, 2000, NULL, 'flutter-device', 2)")
             db.execSQL("INSERT INTO app_metadata VALUES (1, 'flutter-device', 3, 2)")
             db.version = 3
+        }
+    }
+
+    private fun createRoomV4(file: File) {
+        SQLiteDatabase.openOrCreateDatabase(file, null).use { db ->
+            db.execSQL("CREATE TABLE todos (id TEXT NOT NULL PRIMARY KEY, date TEXT NOT NULL, title TEXT NOT NULL, note TEXT NOT NULL DEFAULT '', is_completed INTEGER NOT NULL DEFAULT 0, sort_order TEXT NOT NULL, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, deleted_at INTEGER, device_id TEXT NOT NULL, revision INTEGER NOT NULL DEFAULT 1)")
+            db.execSQL("CREATE INDEX todos_date_idx ON todos(date)")
+            db.execSQL("CREATE TABLE daily_reviews (id TEXT NOT NULL PRIMARY KEY, date TEXT NOT NULL, highlight TEXT NOT NULL DEFAULT '', challenge TEXT NOT NULL DEFAULT '', learning TEXT NOT NULL DEFAULT '', tomorrow_focus TEXT NOT NULL DEFAULT '', mood INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, deleted_at INTEGER, device_id TEXT NOT NULL, revision INTEGER NOT NULL DEFAULT 1)")
+            db.execSQL("CREATE UNIQUE INDEX reviews_date_idx ON daily_reviews(date)")
+            db.execSQL("CREATE TABLE daily_summaries (id TEXT NOT NULL PRIMARY KEY, date TEXT NOT NULL, content TEXT NOT NULL, provider TEXT NOT NULL, model TEXT NOT NULL, generated_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, deleted_at INTEGER, device_id TEXT NOT NULL, revision INTEGER NOT NULL DEFAULT 1)")
+            db.execSQL("CREATE UNIQUE INDEX summaries_date_idx ON daily_summaries(date)")
+            db.execSQL("CREATE TABLE app_metadata (id INTEGER NOT NULL PRIMARY KEY DEFAULT 1, device_id TEXT NOT NULL, schema_version_value INTEGER NOT NULL, legacy_migration_version INTEGER NOT NULL DEFAULT 0, last_sync_at INTEGER, last_sync_status TEXT NOT NULL DEFAULT '')")
+            db.execSQL("INSERT INTO todos VALUES ('v4-id', '2026-07-17', 'V4 待办', '', 0, '1', 1000, 1000, NULL, 'v4-device', 1)")
+            db.execSQL("INSERT INTO app_metadata VALUES (1, 'v4-device', 4, 0, NULL, '')")
+            db.version = 4
         }
     }
 }

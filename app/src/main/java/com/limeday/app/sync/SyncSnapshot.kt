@@ -4,6 +4,7 @@ import com.limeday.app.data.DailyReview
 import com.limeday.app.data.DailySummary
 import com.limeday.app.data.SyncEntity
 import com.limeday.app.data.TodoItem
+import com.limeday.app.data.TodoPriority
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -72,6 +73,11 @@ data class SyncSnapshot(
             title = json.getString("title"),
             note = json.optString("note"),
             isCompleted = json.optBoolean("isCompleted"),
+            priority = if (json.has("priority")) {
+                TodoPriority.normalize(json.optInt("priority", TodoPriority.NORMAL))
+            } else {
+                TodoPriority.NORMAL
+            },
             sortOrder = json.getString("sortOrder"),
             createdAt = json.getLong("createdAt"),
             updatedAt = json.getLong("updatedAt"),
@@ -112,7 +118,7 @@ data class SyncSnapshot(
 
 private fun TodoItem.toJson() = JSONObject()
     .put("id", id).put("date", date).put("title", title).put("note", note)
-    .put("isCompleted", isCompleted).put("sortOrder", sortOrder)
+    .put("isCompleted", isCompleted).put("priority", TodoPriority.normalize(priority)).put("sortOrder", sortOrder)
     .put("createdAt", createdAt).put("updatedAt", updatedAt).putNullable("deletedAt", deletedAt)
     .put("deviceId", deviceId).put("revision", revision)
 

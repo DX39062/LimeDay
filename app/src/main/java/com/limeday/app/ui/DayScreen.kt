@@ -1,13 +1,10 @@
 package com.limeday.app.ui
 
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -23,52 +20,51 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.ArrowForward
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
-import androidx.compose.material.icons.rounded.Add
-import androidx.compose.material.icons.rounded.CheckCircle
-import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.DateRange
-import androidx.compose.material.icons.rounded.Delete
-import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.Settings
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledIconButton
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalFocusManager
-import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.text.style.TextDecoration
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import com.limeday.app.data.TodoItem
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.util.Locale
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.animateIntAsState
+import androidx.compose.animation.core.tween
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -80,11 +76,36 @@ fun DayScreen(
     onAddTodo: (String) -> Unit,
     onToggleTodo: (TodoItem) -> Unit,
     onUpdateTodo: (TodoItem, String, String) -> Unit,
+    onSetTodoPriority: (TodoItem, Int) -> Unit,
+    onMoveTodo: (TodoItem, LocalDate) -> Unit,
+    onDuplicateTodo: (TodoItem) -> Unit,
     onDeleteTodo: (TodoItem) -> Unit,
+    onRestoreTodo: (TodoItem) -> Unit,
     onOpenReview: () -> Unit,
     onOpenSettings: () -> Unit
 ) {
     var editingTodo by remember { mutableStateOf<TodoItem?>(null) }
+    var expandedTodoId by remember { mutableStateOf<String?>(null) }
+    val snackbarHostState = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
+    val deleteWithUndo: (TodoItem) -> Unit = { todo ->
+        onDeleteTodo(todo)
+        expandedTodoId = null
+        scope.launch {
+            snackbarHostState.currentSnackbarData?.dismiss()
+            val timeout = launch {
+                delay(5_000)
+                snackbarHostState.currentSnackbarData?.dismiss()
+            }
+            val result = snackbarHostState.showSnackbar(
+                message = "已移入回收站",
+                actionLabel = "撤销",
+                duration = SnackbarDuration.Indefinite
+            )
+            timeout.cancel()
+            if (result == SnackbarResult.ActionPerformed) onRestoreTodo(todo)
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -103,6 +124,7 @@ fun DayScreen(
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background)
             )
         },
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         containerColor = MaterialTheme.colorScheme.background
     ) { innerPadding ->
         if (state.isLoading) {
@@ -122,12 +144,20 @@ fun DayScreen(
                     item { EmptyTodos() }
                 } else {
                     items(state.todos, key = TodoItem::id) { todo ->
-                        SwipeTodoRow(
-                            todo = todo,
-                            onToggle = { onToggleTodo(todo) },
-                            onEdit = { editingTodo = todo },
-                            onDelete = { onDeleteTodo(todo) }
-                        )
+                        Box(Modifier.animateItem(fadeInSpec = tween(180), fadeOutSpec = tween(180), placementSpec = tween(220))) {
+                            SwipeTodoRow(
+                                todo = todo,
+                                expanded = expandedTodoId == todo.id,
+                                anyRowExpanded = expandedTodoId != null,
+                                onExpandedChange = { expanded -> expandedTodoId = if (expanded) todo.id else null },
+                                onToggle = { onToggleTodo(todo) },
+                                onEdit = { editingTodo = todo },
+                                onSetPriority = { onSetTodoPriority(todo, it) },
+                                onMove = { onMoveTodo(todo, it) },
+                                onDuplicate = { onDuplicateTodo(todo) },
+                                onDelete = { deleteWithUndo(todo) }
+                            )
+                        }
                     }
                 }
                 item { ReviewEntry(state, onOpenReview) }
@@ -144,7 +174,7 @@ fun DayScreen(
                 editingTodo = null
             },
             onDelete = {
-                onDeleteTodo(todo)
+                deleteWithUndo(todo)
                 editingTodo = null
             }
         )
@@ -193,6 +223,9 @@ private fun DateHeader(
 
 @Composable
 private fun ProgressPanel(state: DayUiState) {
+    val animatedProgress by animateFloatAsState(state.progress, tween(220), label = "daily progress")
+    val animatedCompleted by animateIntAsState(state.completedCount, tween(220), label = "completed count")
+    val animatedPercent by animateIntAsState(state.progressPercent, tween(220), label = "progress percent")
     Surface(
         shape = RoundedCornerShape(16.dp),
         color = MaterialTheme.colorScheme.primaryContainer
@@ -201,12 +234,12 @@ private fun ProgressPanel(state: DayUiState) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.Bottom) {
                 Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
                     Text("完成进度", style = MaterialTheme.typography.labelLarge)
-                    Text("${state.completedCount} / ${state.todos.size} 项", style = MaterialTheme.typography.titleLarge)
+                    Text("$animatedCompleted / ${state.todos.size} 项", style = MaterialTheme.typography.titleLarge)
                 }
-                Text("${state.progressPercent}%", style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.primary)
+                Text("$animatedPercent%", style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.primary)
             }
             LinearProgressIndicator(
-                progress = { state.progress },
+                progress = { animatedProgress },
                 modifier = Modifier.fillMaxWidth().height(7.dp).clip(CircleShape),
                 trackColor = MaterialTheme.colorScheme.surface.copy(alpha = .65f)
             )
@@ -235,7 +268,7 @@ private fun QuickAdd(onAdd: (String) -> Unit) {
                         focusManager.clearFocus()
                     },
                     enabled = title.isNotBlank()
-                ) { Icon(Icons.Rounded.Add, contentDescription = "添加待办") }
+                ) { TodoAddIcon(Modifier.semantics { contentDescription = "添加待办" }) }
             },
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
             keyboardActions = KeyboardActions(onDone = {
@@ -256,7 +289,9 @@ private fun EmptyTodos() {
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        Icon(Icons.Rounded.CheckCircle, contentDescription = null, modifier = Modifier.size(32.dp), tint = MaterialTheme.colorScheme.primary)
+        CompositionLocalProvider(androidx.compose.material3.LocalContentColor provides MaterialTheme.colorScheme.primary) {
+            TodoCheckIcon(checked = true, size = 32.dp)
+        }
         Text("今天还没有待办", style = MaterialTheme.typography.titleMedium)
         Text("从最重要的一件事开始", color = MaterialTheme.colorScheme.onSurfaceVariant)
     }

@@ -1,5 +1,10 @@
 package com.limeday.app.ui
 
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.core.tween
 import androidx.compose.runtime.Composable
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
@@ -18,7 +23,14 @@ fun LimeDayApp(
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val navController = rememberNavController()
 
-    NavHost(navController = navController, startDestination = "day") {
+    NavHost(
+        navController = navController,
+        startDestination = "day",
+        enterTransition = { fadeIn(tween(180)) + slideInHorizontally(tween(220)) { it / 12 } },
+        exitTransition = { fadeOut(tween(150)) + slideOutHorizontally(tween(200)) { -it / 16 } },
+        popEnterTransition = { fadeIn(tween(180)) + slideInHorizontally(tween(220)) { -it / 12 } },
+        popExitTransition = { fadeOut(tween(150)) + slideOutHorizontally(tween(200)) { it / 16 } }
+    ) {
         composable("day") {
             DayScreen(
                 state = state,
@@ -28,7 +40,11 @@ fun LimeDayApp(
                 onAddTodo = viewModel::addTodo,
                 onToggleTodo = viewModel::toggleTodo,
                 onUpdateTodo = viewModel::updateTodo,
+                onSetTodoPriority = viewModel::setTodoPriority,
+                onMoveTodo = viewModel::moveTodo,
+                onDuplicateTodo = viewModel::duplicateTodo,
                 onDeleteTodo = viewModel::deleteTodo,
+                onRestoreTodo = viewModel::restoreTodo,
                 onOpenReview = { navController.navigate("review") },
                 onOpenSettings = { navController.navigate("settings") }
             )
@@ -41,7 +57,11 @@ fun LimeDayApp(
                 onFlushReview = viewModel::flushReview,
                 onToggleTodo = viewModel::toggleTodo,
                 onUpdateTodo = viewModel::updateTodo,
+                onSetTodoPriority = viewModel::setTodoPriority,
+                onMoveTodo = viewModel::moveTodo,
+                onDuplicateTodo = viewModel::duplicateTodo,
                 onDeleteTodo = viewModel::deleteTodo,
+                onRestoreTodo = viewModel::restoreTodo,
                 onSaveLlmConfig = viewModel::saveLlmConfig,
                 onClearLlmConfig = viewModel::clearLlmConfig,
                 onGenerateSummary = viewModel::generateSummary,
