@@ -4,6 +4,10 @@ import com.limeday.app.data.DailyReview
 import com.limeday.app.data.TodoItem
 import com.limeday.app.data.TodoPriority
 import com.limeday.app.data.RangeSummary
+import com.limeday.app.data.TodoDefaults
+import com.limeday.app.data.TodoGroup
+import com.limeday.app.data.TodoStep
+import com.limeday.app.data.TodoTombstone
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
@@ -17,6 +21,9 @@ class SyncSnapshotTest {
     fun `snapshot json round trip keeps records and tombstones`() {
         val source = snapshot(
             todos = listOf(todo(id = "todo-1", updatedAt = 20, deletedAt = 20, priority = TodoPriority.HIGH)),
+            groups = listOf(group()),
+            steps = listOf(step()),
+            tombstones = listOf(tombstone(updatedAt = 40)),
             reviews = listOf(review(updatedAt = 30))
         )
 
@@ -26,7 +33,31 @@ class SyncSnapshotTest {
         assertEquals("todo-1", decoded.todos.single().id)
         assertNotNull(decoded.todos.single().deletedAt)
         assertEquals(TodoPriority.HIGH, decoded.todos.single().priority)
+        assertEquals("工作", decoded.groups.first { !it.isInbox }.name)
+        assertEquals("拆成一步", decoded.steps.single().title)
+        assertEquals("todo-1", decoded.todoTombstones.single().todoId)
         assertEquals("亮点", decoded.reviews.single().highlight)
+    }
+
+    @Test
+    fun `v1 snapshot migrates to v2 with inbox and new todo defaults`() {
+        val json = JSONObject(snapshot(todos = listOf(todo(updatedAt = 10))).toJson()).apply {
+            put("formatVersion", 1)
+            remove("groups")
+            remove("steps")
+            remove("todoTombstones")
+            getJSONArray("todos").getJSONObject(0).apply {
+                remove("groupId")
+                remove("recurrence")
+            }
+        }
+
+        val decoded = SyncSnapshot.fromJson(json.toString())
+
+        assertEquals(2, decoded.formatVersion)
+        assertEquals(TodoDefaults.INBOX_GROUP_ID, decoded.todos.single().groupId)
+        assertTrue(decoded.groups.single().isInbox)
+        assertTrue(decoded.steps.isEmpty())
     }
 
     @Test
@@ -121,20 +152,54 @@ class SyncSnapshotTest {
 
     @Test
     fun `unsupported backup format is rejected before merge`() {
-        val invalid = snapshot().toJson().replace("\"formatVersion\":1", "\"formatVersion\":99")
+        val invalid = JSONObject(snapshot().toJson()).put("formatVersion", 99).toString()
 
         assertThrows(IllegalArgumentException::class.java) { SyncSnapshot.fromJson(invalid) }
+    }
+
+    @Test
+    fun `permanent tombstone suppresses older todo and its steps`() {
+        val local = snapshot(
+            todos = listOf(todo(updatedAt = 100)),
+            steps = listOf(step(updatedAt = 100))
+        )
+        val remote = snapshot(
+            deviceId = "device-b",
+            tombstones = listOf(tombstone(updatedAt = 200, deviceId = "device-b"))
+        )
+
+        val merged = SyncSnapshot.merge(local, remote)
+
+        assertTrue(merged.todos.isEmpty())
+        assertTrue(merged.steps.isEmpty())
+        assertEquals("todo-1", merged.todoTombstones.single().todoId)
+    }
+
+    @Test
+    fun `newer todo can explicitly recover past an older permanent tombstone`() {
+        val local = snapshot(tombstones = listOf(tombstone(updatedAt = 100)))
+        val remote = snapshot(deviceId = "device-b", todos = listOf(todo(updatedAt = 200, deviceId = "device-b")))
+
+        val merged = SyncSnapshot.merge(local, remote)
+
+        assertEquals("todo-1", merged.todos.single().id)
     }
 
     private fun snapshot(
         deviceId: String = "device-a",
         todos: List<TodoItem> = emptyList(),
+        groups: List<TodoGroup> = emptyList(),
+        steps: List<TodoStep> = emptyList(),
+        tombstones: List<TodoTombstone> = emptyList(),
         reviews: List<DailyReview> = emptyList(),
         rangeSummaries: List<RangeSummary> = emptyList()
     ) = SyncSnapshot(
         generatedAt = 100,
         deviceId = deviceId,
         todos = todos,
+        groups = groups,
+        steps = steps,
+        todoTombstones = tombstones,
         reviews = reviews,
         summaries = emptyList(),
         rangeSummaries = rangeSummaries
@@ -156,6 +221,30 @@ class SyncSnapshotTest {
         createdAt = 1,
         updatedAt = updatedAt,
         deletedAt = deletedAt,
+        deviceId = deviceId
+    )
+
+    private fun group() = TodoGroup(
+        id = "group-1",
+        name = "工作",
+        sortOrder = "1",
+        deviceId = "device-a"
+    )
+
+    private fun step(updatedAt: Long = 30) = TodoStep(
+        id = "step-1",
+        todoId = "todo-1",
+        title = "拆成一步",
+        sortOrder = "1",
+        createdAt = 1,
+        updatedAt = updatedAt,
+        deviceId = "device-a"
+    )
+
+    private fun tombstone(updatedAt: Long, deviceId: String = "device-a") = TodoTombstone(
+        todoId = "todo-1",
+        updatedAt = updatedAt,
+        tombstonedAt = updatedAt,
         deviceId = deviceId
     )
 

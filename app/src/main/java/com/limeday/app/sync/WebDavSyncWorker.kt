@@ -9,6 +9,7 @@ import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import com.limeday.app.LimeDayApplication
+import com.limeday.app.settings.TodoReminderWorker
 import java.util.concurrent.TimeUnit
 
 class WebDavSyncWorker(
@@ -19,7 +20,10 @@ class WebDavSyncWorker(
         val application = applicationContext as LimeDayApplication
         val config = application.webDavConfigStore.load()
         if (!config.isConfigured) return Result.success()
-        return runCatching { application.syncCoordinator.sync(config) }
+        return runCatching {
+            application.syncCoordinator.sync(config)
+            application.repository.activeReminderTodos().forEach { TodoReminderWorker.schedule(application, it) }
+        }
             .fold(
                 onSuccess = { Result.success() },
                 onFailure = { error ->

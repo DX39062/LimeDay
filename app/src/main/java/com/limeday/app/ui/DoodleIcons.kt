@@ -44,7 +44,13 @@ enum class DoodleIconType {
     Expand,
     Collapse,
     Export,
-    Import
+    Import,
+    Search,
+    Group,
+    Clock,
+    Repeat,
+    Steps,
+    Erase
 }
 
 @Composable
@@ -221,6 +227,38 @@ private fun DrawScope.drawDoodleIcon(type: DoodleIconType, tint: Color, accent: 
             path(listOf(5f to 10.7f, 5.4f to 19.2f, 18.8f to 19.1f, 19f to 10.8f), style = fine)
             line(12f, 3.8f, 12f, 15.4f)
             path(listOf(7.8f to 11.6f, 12f to 15.4f, 16.2f to 11.6f), style = fine)
+        }
+        DoodleIconType.Search -> {
+            drawCircle(tint, 6.2f * unit, p(10.2f, 10.2f), style = stroke)
+            line(14.7f, 14.7f, 20f, 20f)
+        }
+        DoodleIconType.Group -> {
+            path(listOf(4.2f to 7.2f, 10f to 7.3f, 11.6f to 9.1f, 20f to 9.1f, 19.7f to 19.2f, 4.5f to 19.5f, 4.2f to 7.2f), closed = true)
+            line(7.2f, 12.2f, 16.8f, 12.1f, fine)
+        }
+        DoodleIconType.Clock -> {
+            drawCircle(tint, 8.4f * unit, p(12f, 12f), style = stroke)
+            line(12f, 7f, 12f, 12.2f, fine)
+            line(12f, 12.2f, 16.2f, 14.4f, fine)
+        }
+        DoodleIconType.Repeat -> {
+            path(listOf(5f to 9f, 7.4f to 6.5f, 17.2f to 6.5f, 19.2f to 8.8f), style = fine)
+            path(listOf(16.6f to 4.2f, 19.2f to 8.8f, 14.5f to 9.2f), style = fine)
+            path(listOf(19f to 15f, 16.6f to 17.5f, 6.8f to 17.5f, 4.8f to 15.2f), style = fine)
+            path(listOf(7.4f to 19.8f, 4.8f to 15.2f, 9.5f to 14.8f), style = fine)
+        }
+        DoodleIconType.Steps -> {
+            path(listOf(4.2f to 7.2f, 6.1f to 9.1f, 9.1f to 5.8f), style = fine)
+            line(11.5f, 7.3f, 20f, 7.1f, fine)
+            path(listOf(4.2f to 13f, 6.1f to 14.9f, 9.1f to 11.6f), style = fine)
+            line(11.5f, 13.1f, 20f, 12.9f, fine)
+            path(listOf(4.2f to 18.6f, 6.1f to 20.5f, 9.1f to 17.2f), style = fine)
+            line(11.5f, 18.7f, 20f, 18.5f, fine)
+        }
+        DoodleIconType.Erase -> {
+            path(listOf(5f to 14.4f, 12.7f to 5.2f, 19f to 10.5f, 11.6f to 19.2f, 7.8f to 19.2f, 5f to 14.4f), closed = true)
+            line(8.8f, 10f, 14.7f, 15f, fine)
+            line(11.7f, 19.2f, 20f, 19.1f, fine)
         }
     }
 }

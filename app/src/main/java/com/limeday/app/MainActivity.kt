@@ -4,6 +4,7 @@ import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
+import android.content.Intent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -22,6 +23,7 @@ import java.time.LocalDate
 
 class MainActivity : ComponentActivity() {
     private var notificationPermissionGranted by mutableStateOf(false)
+    private lateinit var dayViewModel: DayViewModel
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -41,6 +43,10 @@ class MainActivity : ComponentActivity() {
                 application = app
             )
         )[DayViewModel::class.java]
+        dayViewModel = viewModel
+        intent.getStringExtra(EXTRA_SELECTED_DATE)?.let { value ->
+            runCatching { LocalDate.parse(value) }.getOrNull()?.let(viewModel::selectDate)
+        }
 
         notificationPermissionGranted = hasNotificationPermission()
         val notificationPermissionLauncher = registerForActivityResult(
@@ -78,7 +84,19 @@ class MainActivity : ComponentActivity() {
         notificationPermissionGranted = hasNotificationPermission()
     }
 
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        intent.getStringExtra(EXTRA_SELECTED_DATE)?.let { value ->
+            runCatching { LocalDate.parse(value) }.getOrNull()?.let(dayViewModel::selectDate)
+        }
+    }
+
     private fun hasNotificationPermission(): Boolean =
         Build.VERSION.SDK_INT < 33 ||
             ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
+
+    companion object {
+        const val EXTRA_SELECTED_DATE = "com.limeday.app.SELECTED_DATE"
+    }
 }

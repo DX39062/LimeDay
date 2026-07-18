@@ -26,7 +26,6 @@ import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -91,6 +90,20 @@ fun SummaryScreen(
             contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 12.dp, bottom = 40.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
+            if (!state.appSettings.llmEnabled) {
+                item {
+                    Surface(
+                        modifier = Modifier.fillMaxWidth().testTag("llm_disabled_notice"),
+                        shape = RoundedCornerShape(12.dp),
+                        color = MaterialTheme.colorScheme.surfaceContainer
+                    ) {
+                        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Text("智能总结已关闭", style = MaterialTheme.typography.titleMedium)
+                            Text("可在“设置 → 总结设置”重新开启。已有总结历史仍可查看。", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+                }
+            } else {
             item {
                 SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
                     SummaryPeriod.entries.forEachIndexed { index, value ->
@@ -122,7 +135,7 @@ fun SummaryScreen(
                         Text("包含已有每日总结", style = MaterialTheme.typography.titleSmall)
                         Text("默认只使用原始待办与复盘", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
-                    Switch(checked = includeExisting, onCheckedChange = { includeExisting = it })
+                    DoodleSwitch(checked = includeExisting, onCheckedChange = { includeExisting = it })
                 }
             }
             item {
@@ -169,6 +182,7 @@ fun SummaryScreen(
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+            }
             }
             item { HorizontalDivider(Modifier.padding(vertical = 4.dp)) }
             item { Text("总结历史", style = MaterialTheme.typography.headlineSmall) }

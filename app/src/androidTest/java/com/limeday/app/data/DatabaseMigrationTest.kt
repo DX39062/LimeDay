@@ -56,7 +56,7 @@ class DatabaseMigrationTest {
         assertEquals("flutter-id", database.limeDayDao().allTodos().single().id)
         assertEquals(7, database.limeDayDao().allTodos().single().revision)
         assertEquals("flutter-device", database.limeDayDao().metadata()?.deviceId)
-        assertEquals(5, database.limeDayDao().metadata()?.schemaVersionValue)
+        assertEquals(7, database.limeDayDao().metadata()?.schemaVersionValue)
         assertEquals(TodoPriority.NORMAL, database.limeDayDao().allTodos().single().priority)
         database.close()
     }
@@ -67,7 +67,7 @@ class DatabaseMigrationTest {
 
         assertEquals("v4-id", database.limeDayDao().allTodos().single().id)
         assertEquals(TodoPriority.NORMAL, database.limeDayDao().allTodos().single().priority)
-        assertEquals(5, database.limeDayDao().metadata()?.schemaVersionValue)
+        assertEquals(7, database.limeDayDao().metadata()?.schemaVersionValue)
         database.close()
     }
 
@@ -77,7 +77,24 @@ class DatabaseMigrationTest {
 
         assertEquals("v5-id", database.limeDayDao().allTodos().single().id)
         assertTrue(database.limeDayDao().allRangeSummaries().isEmpty())
-        assertEquals(6, database.limeDayDao().metadata()?.schemaVersionValue)
+        assertEquals(7, database.limeDayDao().metadata()?.schemaVersionValue)
+        assertEquals(TodoDefaults.INBOX_GROUP_ID, database.limeDayDao().allTodos().single().groupId)
+        assertTrue(database.limeDayDao().allGroups().single().isInbox)
+        database.close()
+    }
+
+    @Test
+    fun roomV6AddsExpandedTodoDataAndPermanentDeletionTables() = runBlocking {
+        val database = openMigratedDatabase(version = 6)
+
+        val todo = database.limeDayDao().allTodos().single()
+        assertEquals("v5-id", todo.id)
+        assertEquals(TodoDefaults.INBOX_GROUP_ID, todo.groupId)
+        assertEquals(TodoRecurrence.NONE, todo.recurrence)
+        assertTrue(database.limeDayDao().allGroups().single().isInbox)
+        assertTrue(database.limeDayDao().allSteps().isEmpty())
+        assertTrue(database.limeDayDao().allTodoTombstones().isEmpty())
+        assertEquals(7, database.limeDayDao().metadata()?.schemaVersionValue)
         database.close()
     }
 
@@ -91,6 +108,7 @@ class DatabaseMigrationTest {
             3 -> createDriftV3(file)
             4 -> createRoomV4(file)
             5 -> createRoomV5(file)
+            6 -> createRoomV6(file)
         }
         return Room.databaseBuilder(context, AppDatabase::class.java, name)
             .addMigrations(
@@ -98,7 +116,8 @@ class DatabaseMigrationTest {
                 AppDatabase.MIGRATION_2_4,
                 AppDatabase.MIGRATION_3_4,
                 AppDatabase.MIGRATION_4_5,
-                AppDatabase.MIGRATION_5_6
+                AppDatabase.MIGRATION_5_6,
+                AppDatabase.MIGRATION_6_7
             )
             .build()
             .also { it.openHelper.writableDatabase }
@@ -163,6 +182,16 @@ class DatabaseMigrationTest {
             db.execSQL("INSERT INTO todos VALUES ('v5-id', '2026-07-17', 'V5 待办', '', 0, 1, '1', 1000, 1000, NULL, 'v5-device', 1)")
             db.execSQL("INSERT INTO app_metadata VALUES (1, 'v5-device', 5, 0, NULL, '')")
             db.version = 5
+        }
+    }
+
+    private fun createRoomV6(file: File) {
+        createRoomV5(file)
+        SQLiteDatabase.openDatabase(file.absolutePath, null, SQLiteDatabase.OPEN_READWRITE).use { db ->
+            db.execSQL("CREATE TABLE range_summaries (id TEXT NOT NULL PRIMARY KEY, range_start TEXT NOT NULL, range_end TEXT NOT NULL, period_type TEXT NOT NULL, prompt TEXT NOT NULL, content TEXT NOT NULL, provider_id TEXT NOT NULL, provider_name TEXT NOT NULL, model TEXT NOT NULL, include_existing_summaries INTEGER NOT NULL DEFAULT 0, generated_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, deleted_at INTEGER, device_id TEXT NOT NULL, revision INTEGER NOT NULL DEFAULT 1)")
+            db.execSQL("CREATE INDEX range_summaries_start_idx ON range_summaries(range_start)")
+            db.execSQL("UPDATE app_metadata SET schema_version_value = 6 WHERE id = 1")
+            db.version = 6
         }
     }
 }

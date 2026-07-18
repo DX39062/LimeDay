@@ -69,10 +69,35 @@ class WebDavClientTest {
     @Test
     fun `missing remote snapshot is treated as first sync`() = runTest {
         server.enqueue(MockResponse().setResponseCode(404))
+        server.enqueue(MockResponse().setResponseCode(404))
 
         val snapshot = client.download(config)
 
         assertNull(snapshot)
+        assertTrue(server.takeRequest().path?.endsWith("/LimeDay/limeday-sync-v2.json") == true)
+        assertTrue(server.takeRequest().path?.endsWith("/LimeDay/limeday-sync-v1.json") == true)
+    }
+
+    @Test
+    fun `download falls back to v1 only when v2 is absent`() = runTest {
+        server.enqueue(MockResponse().setResponseCode(404))
+        server.enqueue(
+            MockResponse().setResponseCode(200).setBody(
+                SyncSnapshot(
+                    formatVersion = 1,
+                    generatedAt = 1,
+                    deviceId = "legacy-device",
+                    todos = emptyList(),
+                    reviews = emptyList(),
+                    summaries = emptyList()
+                ).toJson()
+            )
+        )
+
+        val snapshot = client.download(config)
+
+        assertEquals(2, snapshot?.formatVersion)
+        assertTrue(server.takeRequest().path?.endsWith("/LimeDay/limeday-sync-v2.json") == true)
         assertTrue(server.takeRequest().path?.endsWith("/LimeDay/limeday-sync-v1.json") == true)
     }
 
@@ -94,6 +119,7 @@ class WebDavClientTest {
         val upload = server.takeRequest()
         assertEquals("MKCOL", create.method)
         assertEquals("PUT", upload.method)
+        assertTrue(upload.path?.endsWith("/LimeDay/limeday-sync-v2.json") == true)
         val body = upload.body.readUtf8()
         assertTrue(body.contains("formatVersion"))
         assertFalse(body.contains("secret"))

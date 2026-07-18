@@ -41,6 +41,8 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import com.limeday.app.data.DailyReview
 import com.limeday.app.data.TodoItem
+import com.limeday.app.data.TodoEdit
+import com.limeday.app.data.TodoStep
 import java.time.format.DateTimeFormatter
 import java.time.LocalDate
 import java.util.Locale
@@ -54,7 +56,12 @@ fun ReviewScreen(
     onUpdateReview: ((DailyReview) -> DailyReview) -> Unit,
     onFlushReview: () -> Unit,
     onToggleTodo: (TodoItem) -> Unit,
-    onUpdateTodo: (TodoItem, String, String) -> Unit,
+    onUpdateTodo: (TodoItem, TodoEdit) -> Unit,
+    onAddStep: (String, String) -> Unit,
+    onToggleStep: (TodoStep) -> Unit,
+    onUpdateStep: (TodoStep, String) -> Unit,
+    onMoveStep: (TodoStep, Int) -> Unit,
+    onDeleteStep: (TodoStep) -> Unit,
     onSetTodoPriority: (TodoItem, Int) -> Unit,
     onMoveTodo: (TodoItem, LocalDate) -> Unit,
     onDuplicateTodo: (TodoItem) -> Unit,
@@ -140,6 +147,8 @@ fun ReviewScreen(
                         Box(Modifier.animateItem(fadeInSpec = tween(180), fadeOutSpec = tween(180), placementSpec = tween(220))) {
                             SwipeTodoRow(
                                 todo = todo,
+                                group = state.todoGroups.firstOrNull { it.id == todo.groupId },
+                                steps = state.todoSteps.filter { it.todoId == todo.id },
                                 expanded = expandedTodoId == todo.id,
                                 anyRowExpanded = expandedTodoId != null,
                                 onExpandedChange = { expanded -> expandedTodoId = if (expanded) todo.id else null },
@@ -175,8 +184,9 @@ fun ReviewScreen(
                         }
                     }
                 }
-                item {
-                    SummaryPanel(
+                if (state.appSettings.llmEnabled) {
+                    item {
+                        SummaryPanel(
                         state = state,
                         instruction = instruction,
                         providerId = providerId,
@@ -191,7 +201,22 @@ fun ReviewScreen(
                         onGenerate = { onGenerateSummary(instruction, providerId, model) },
                         onCancel = onCancelSummary,
                         onClearError = onClearError
-                    )
+                        )
+                    }
+                } else if (state.summary != null) {
+                    item {
+                        Surface(
+                            modifier = Modifier.fillMaxWidth().testTag("readonly_daily_summary"),
+                            shape = RoundedCornerShape(12.dp),
+                            color = MaterialTheme.colorScheme.surfaceContainer
+                        ) {
+                            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Text("已有总结", style = MaterialTheme.typography.titleMedium)
+                                Text(state.summary.content, style = MaterialTheme.typography.bodyLarge)
+                                Text("智能总结已关闭，此内容仅供查看。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -200,11 +225,18 @@ fun ReviewScreen(
     editingTodo?.let { todo ->
         TodoEditor(
             todo = todo,
+            groups = state.todoGroups,
+            steps = state.todoSteps.filter { it.todoId == todo.id },
             onDismiss = { editingTodo = null },
-            onSave = { title, note ->
-                onUpdateTodo(todo, title, note)
+            onSave = { edit ->
+                onUpdateTodo(todo, edit)
                 editingTodo = null
             },
+            onAddStep = { onAddStep(todo.id, it) },
+            onToggleStep = onToggleStep,
+            onUpdateStep = onUpdateStep,
+            onMoveStep = onMoveStep,
+            onDeleteStep = onDeleteStep,
             onDelete = {
                 deleteWithUndo(todo)
                 editingTodo = null

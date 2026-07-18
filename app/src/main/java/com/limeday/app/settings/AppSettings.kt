@@ -19,7 +19,8 @@ data class AppSettings(
     val todoReminderMinute: Int = 0,
     val reviewReminderEnabled: Boolean = false,
     val reviewReminderHour: Int = 21,
-    val reviewReminderMinute: Int = 0
+    val reviewReminderMinute: Int = 0,
+    val llmEnabled: Boolean = false
 )
 
 class AppSettingsStore(context: Context) {
@@ -27,6 +28,7 @@ class AppSettingsStore(context: Context) {
     private val mutableSettings = MutableStateFlow(load())
 
     val settings: StateFlow<AppSettings> = mutableSettings.asStateFlow()
+    val hasExplicitLlmSetting: Boolean get() = preferences.contains(KEY_LLM_ENABLED)
 
     fun setThemeMode(mode: ThemeMode) = update { copy(themeMode = mode) }
 
@@ -46,6 +48,8 @@ class AppSettingsStore(context: Context) {
         )
     }
 
+    fun setLlmEnabled(enabled: Boolean) = update { copy(llmEnabled = enabled) }
+
     private fun update(transform: AppSettings.() -> AppSettings) {
         val value = mutableSettings.value.transform()
         preferences.edit {
@@ -56,6 +60,7 @@ class AppSettingsStore(context: Context) {
             putBoolean(KEY_REVIEW_ENABLED, value.reviewReminderEnabled)
             putInt(KEY_REVIEW_HOUR, value.reviewReminderHour)
             putInt(KEY_REVIEW_MINUTE, value.reviewReminderMinute)
+            putBoolean(KEY_LLM_ENABLED, value.llmEnabled)
         }
         mutableSettings.value = value
     }
@@ -69,7 +74,8 @@ class AppSettingsStore(context: Context) {
         todoReminderMinute = preferences.getInt(KEY_TODO_MINUTE, 0).coerceIn(0, 59),
         reviewReminderEnabled = preferences.getBoolean(KEY_REVIEW_ENABLED, false),
         reviewReminderHour = preferences.getInt(KEY_REVIEW_HOUR, 21).coerceIn(0, 23),
-        reviewReminderMinute = preferences.getInt(KEY_REVIEW_MINUTE, 0).coerceIn(0, 59)
+        reviewReminderMinute = preferences.getInt(KEY_REVIEW_MINUTE, 0).coerceIn(0, 59),
+        llmEnabled = preferences.getBoolean(KEY_LLM_ENABLED, false)
     )
 
     companion object {
@@ -81,5 +87,6 @@ class AppSettingsStore(context: Context) {
         private const val KEY_REVIEW_ENABLED = "review-reminder-enabled"
         private const val KEY_REVIEW_HOUR = "review-reminder-hour"
         private const val KEY_REVIEW_MINUTE = "review-reminder-minute"
+        private const val KEY_LLM_ENABLED = "llm-enabled"
     }
 }

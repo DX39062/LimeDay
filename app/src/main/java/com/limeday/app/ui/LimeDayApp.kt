@@ -6,6 +6,8 @@ import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.activity.compose.BackHandler
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
@@ -35,6 +37,7 @@ fun LimeDayApp(
     val mainRoutes = setOf("day", "summary", "settings")
 
     Scaffold(
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
         bottomBar = {
             if (route in mainRoutes) {
                 NavigationBar {
@@ -95,7 +98,12 @@ fun LimeDayApp(
                     onToday = viewModel::today,
                     onAddTodo = viewModel::addTodo,
                     onToggleTodo = viewModel::toggleTodo,
-                    onUpdateTodo = viewModel::updateTodo,
+                    onUpdateTodo = { todo, edit -> viewModel.updateTodo(todo, edit) },
+                    onAddStep = viewModel::addTodoStep,
+                    onToggleStep = viewModel::toggleTodoStep,
+                    onUpdateStep = viewModel::updateTodoStep,
+                    onMoveStep = viewModel::moveTodoStep,
+                    onDeleteStep = viewModel::deleteTodoStep,
                     onSetTodoPriority = viewModel::setTodoPriority,
                     onMoveTodo = viewModel::moveTodo,
                     onDuplicateTodo = viewModel::duplicateTodo,
@@ -103,7 +111,13 @@ fun LimeDayApp(
                     onRestoreTodo = viewModel::restoreTodo,
                     onOpenReview = { navController.navigate("review") },
                     onSelectDate = viewModel::selectDate,
-                    onLoadMonth = viewModel::loadMonthTodoStatuses
+                    onLoadMonth = viewModel::loadMonthTodoStatuses,
+                    onSetViewMode = viewModel::setTodoViewMode,
+                    onSearch = viewModel::setTodoSearchQuery,
+                    onAddGroup = viewModel::addTodoGroup,
+                    onUpdateGroup = viewModel::updateTodoGroup,
+                    onMoveGroup = viewModel::moveTodoGroup,
+                    onDeleteGroup = viewModel::deleteTodoGroup
                 )
             }
             composable("summary") {
@@ -123,7 +137,12 @@ fun LimeDayApp(
                     onUpdateReview = viewModel::updateReview,
                     onFlushReview = viewModel::flushReview,
                     onToggleTodo = viewModel::toggleTodo,
-                    onUpdateTodo = viewModel::updateTodo,
+                    onUpdateTodo = { todo, edit -> viewModel.updateTodo(todo, edit) },
+                    onAddStep = viewModel::addTodoStep,
+                    onToggleStep = viewModel::toggleTodoStep,
+                    onUpdateStep = viewModel::updateTodoStep,
+                    onMoveStep = viewModel::moveTodoStep,
+                    onDeleteStep = viewModel::deleteTodoStep,
                     onSetTodoPriority = viewModel::setTodoPriority,
                     onMoveTodo = viewModel::moveTodo,
                     onDuplicateTodo = viewModel::duplicateTodo,
@@ -141,6 +160,7 @@ fun LimeDayApp(
                     notificationPermissionGranted = notificationPermissionGranted,
                     onRequestNotificationPermission = onRequestNotificationPermission,
                     onSetThemeMode = viewModel::setThemeMode,
+                    onSetLlmEnabled = viewModel::setLlmEnabled,
                     onSetTodoReminder = viewModel::setTodoReminder,
                     onSetReviewReminder = viewModel::setReviewReminder,
                     onRequestExport = onRequestExport,
@@ -166,7 +186,12 @@ fun LimeDayApp(
                 )
             }
             composable("trash") {
-                TrashScreen(state = state, onBack = navController::popBackStack, onRestore = viewModel::restoreTodo)
+                TrashScreen(
+                    state = state,
+                    onBack = navController::popBackStack,
+                    onRestore = viewModel::restoreTodo,
+                    onPermanentDelete = viewModel::permanentlyDeleteTodos
+                )
             }
             composable("webdav") {
                 WebDavSettingsScreen(
@@ -178,6 +203,17 @@ fun LimeDayApp(
                     onSync = viewModel::syncNow
                 )
             }
+        }
+    }
+
+    BackHandler(enabled = route != "day") {
+        if (route in mainRoutes) {
+            navController.navigate("day") {
+                popUpTo(navController.graph.findStartDestination().id) { inclusive = false }
+                launchSingleTop = true
+            }
+        } else {
+            navController.popBackStack()
         }
     }
 }

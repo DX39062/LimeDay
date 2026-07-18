@@ -24,6 +24,12 @@ interface LimeDayDao {
     @Query("SELECT * FROM range_summaries WHERE deleted_at IS NULL ORDER BY generated_at DESC")
     fun observeRangeSummaries(): Flow<List<RangeSummary>>
 
+    @Query("SELECT * FROM todo_groups WHERE deleted_at IS NULL ORDER BY is_inbox DESC, sort_order ASC, created_at ASC")
+    fun observeGroups(): Flow<List<TodoGroup>>
+
+    @Query("SELECT * FROM todo_steps WHERE deleted_at IS NULL ORDER BY todo_id ASC, sort_order ASC, created_at ASC")
+    fun observeSteps(): Flow<List<TodoStep>>
+
     @Query("SELECT * FROM todos")
     suspend fun allTodos(): List<TodoItem>
 
@@ -35,6 +41,45 @@ interface LimeDayDao {
 
     @Query("SELECT * FROM range_summaries")
     suspend fun allRangeSummaries(): List<RangeSummary>
+
+    @Query("SELECT * FROM todo_groups")
+    suspend fun allGroups(): List<TodoGroup>
+
+    @Query("SELECT * FROM todo_steps")
+    suspend fun allSteps(): List<TodoStep>
+
+    @Query("SELECT * FROM todo_tombstones")
+    suspend fun allTodoTombstones(): List<TodoTombstone>
+
+    @Query("SELECT * FROM todos WHERE deleted_at IS NULL AND is_completed = 0 AND reminder_at IS NOT NULL")
+    suspend fun activeReminderTodos(): List<TodoItem>
+
+    @Query("SELECT * FROM todos WHERE id = :id LIMIT 1")
+    suspend fun todoById(id: String): TodoItem?
+
+    @Query("SELECT * FROM todo_steps WHERE todo_id = :todoId AND deleted_at IS NULL ORDER BY sort_order ASC, created_at ASC")
+    suspend fun stepsForTodo(todoId: String): List<TodoStep>
+
+    @Query("SELECT * FROM todos WHERE recurrence_source_id = :sourceId AND date = :date AND deleted_at IS NULL LIMIT 1")
+    suspend fun recurrenceInstance(sourceId: String, date: String): TodoItem?
+
+    @Query("""SELECT * FROM todos
+        WHERE deleted_at IS NULL AND (
+            title LIKE '%' || :query || '%' ESCAPE '\\' OR
+            note LIKE '%' || :query || '%' ESCAPE '\\' OR
+            EXISTS (SELECT 1 FROM todo_steps s WHERE s.todo_id = todos.id AND s.deleted_at IS NULL AND s.title LIKE '%' || :query || '%' ESCAPE '\\')
+        )
+        ORDER BY is_completed ASC, date ASC, sort_order ASC""")
+    fun searchTodos(query: String): Flow<List<TodoItem>>
+
+    @Query("""SELECT * FROM todos WHERE deleted_at IS NULL AND is_completed = 0 AND
+        ((due_at IS NOT NULL AND due_at < :now) OR (due_at IS NULL AND due_date IS NOT NULL AND due_date < :today))
+        ORDER BY due_date ASC, due_at ASC, sort_order ASC""")
+    fun overdueTodos(today: String, now: Long): Flow<List<TodoItem>>
+
+    @Query("""SELECT * FROM todos WHERE deleted_at IS NULL AND due_date IS NOT NULL
+        ORDER BY is_completed ASC, due_date ASC, due_at ASC, sort_order ASC""")
+    fun plannedTodos(): Flow<List<TodoItem>>
 
     @Query("SELECT * FROM todos WHERE date >= :start AND date <= :end AND deleted_at IS NULL ORDER BY date ASC, is_completed ASC, sort_order ASC")
     suspend fun todosBetween(start: String, end: String): List<TodoItem>
@@ -71,6 +116,30 @@ interface LimeDayDao {
 
     @Upsert
     suspend fun upsertRangeSummaries(summaries: List<RangeSummary>)
+
+    @Upsert
+    suspend fun upsertGroup(group: TodoGroup)
+
+    @Upsert
+    suspend fun upsertGroups(groups: List<TodoGroup>)
+
+    @Upsert
+    suspend fun upsertStep(step: TodoStep)
+
+    @Upsert
+    suspend fun upsertSteps(steps: List<TodoStep>)
+
+    @Upsert
+    suspend fun upsertTodoTombstone(tombstone: TodoTombstone)
+
+    @Upsert
+    suspend fun upsertTodoTombstones(tombstones: List<TodoTombstone>)
+
+    @Query("DELETE FROM todo_steps WHERE todo_id IN (:todoIds)")
+    suspend fun deleteStepsForTodos(todoIds: List<String>)
+
+    @Query("DELETE FROM todos WHERE id IN (:todoIds)")
+    suspend fun deleteTodosById(todoIds: List<String>)
 
     @Upsert
     suspend fun upsertMetadata(metadata: AppMetadata)

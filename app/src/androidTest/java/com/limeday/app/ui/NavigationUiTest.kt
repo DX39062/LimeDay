@@ -20,7 +20,7 @@ class NavigationUiTest {
     val composeRule = createAndroidComposeRule<MainActivity>()
 
     @Test
-    fun reviewIsASecondLevelScreenAndContainsSummaryPanel() {
+    fun reviewIsASecondLevelScreenAndHidesSummaryWhenDisabledByDefault() {
         composeRule.onNodeWithTag("day_screen").assertExists()
         composeRule.onNodeWithTag("review_screen").assertDoesNotExist()
 
@@ -31,8 +31,7 @@ class NavigationUiTest {
         composeRule.onNodeWithText("解决了什么问题？").assertExists()
         composeRule.onNodeWithText("随便写写").assertExists()
         composeRule.onNodeWithText("今天有什么收获？").assertDoesNotExist()
-        composeRule.onNodeWithTag("review_screen").performScrollToNode(hasTestTag("summary_panel"))
-        composeRule.onNodeWithTag("summary_panel", useUnmergedTree = true).assertExists()
+        composeRule.onNodeWithTag("summary_panel", useUnmergedTree = true).assertDoesNotExist()
     }
 
     @Test
@@ -49,7 +48,7 @@ class NavigationUiTest {
         composeRule.onNodeWithText("总结").performClick()
 
         composeRule.onNodeWithTag("summary_screen").assertExists()
-        composeRule.onNodeWithText("本周").assertExists()
+        composeRule.onNodeWithTag("llm_disabled_notice").assertExists()
         composeRule.onNodeWithText("总结历史").assertExists()
         composeRule.onNodeWithContentDescription("模型服务").assertDoesNotExist()
     }
@@ -90,5 +89,16 @@ class NavigationUiTest {
         composeRule.onNodeWithText("回收站").performClick()
 
         composeRule.onNodeWithTag("trash_screen").assertExists()
+    }
+
+    @Test
+    fun committedBackFromReviewReturnsOnceToDay() {
+        composeRule.onNodeWithTag("review_entry").performClick()
+        composeRule.onNodeWithTag("review_screen").assertExists()
+
+        composeRule.activityRule.scenario.onActivity { it.onBackPressedDispatcher.onBackPressed() }
+
+        composeRule.onNodeWithTag("day_screen").assertExists()
+        composeRule.onNodeWithTag("review_screen").assertDoesNotExist()
     }
 }

@@ -33,7 +33,6 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -385,7 +384,7 @@ internal fun LlmProviderEditorDialog(
                         Text("允许本地 HTTP", style = MaterialTheme.typography.titleSmall)
                         Text("仅用于 Ollama 或可信局域网", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
-                    Switch(checked = draft.allowInsecureHttp, onCheckedChange = { draft = draft.copy(allowInsecureHttp = it) })
+                    DoodleSwitch(checked = draft.allowInsecureHttp, onCheckedChange = { draft = draft.copy(allowInsecureHttp = it) })
                 }
                 if (draft.allowInsecureHttp) {
                     Text("HTTP 不提供传输加密，API Key 和记录可能被同网络中的其他设备看到。", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)

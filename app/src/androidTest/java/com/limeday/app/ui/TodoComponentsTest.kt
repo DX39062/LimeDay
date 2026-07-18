@@ -138,8 +138,15 @@ class TodoComponentsTest {
             LimeDayTheme {
                 TodoEditor(
                     todo = todo(),
+                    groups = emptyList(),
+                    steps = emptyList(),
                     onDismiss = {},
-                    onSave = { _, _ -> },
+                    onSave = {},
+                    onAddStep = {},
+                    onToggleStep = {},
+                    onUpdateStep = { _, _ -> },
+                    onMoveStep = { _, _ -> },
+                    onDeleteStep = {},
                     onDelete = { deleted = true }
                 )
             }

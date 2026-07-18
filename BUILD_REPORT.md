@@ -1,22 +1,22 @@
-# 青柠日记 2.6.0 构建报告
+# 青柠日记 2.7.0 构建报告
 
 构建时间：2026-07-18（Asia/Shanghai）
 
 ## 交付物
 
-- 仓库 APK：`releases/LimeDay-2.6.0-arm64-v8a.apk`
+- 仓库 APK：`releases/LimeDay-2.7.0-arm64-v8a.apk`
 - Gradle 输出：`app/build/outputs/apk/release/app-arm64-v8a-release.apk`
-- 文件大小：8,653,303 bytes
-- SHA-256：`7E646F7138E145ACC7338893CB4D852373D62A1B4A8D17F881F2F8292B10BE2E`
+- 文件大小：8,767,987 bytes
+- SHA-256：`F965ED914F62CC61EBDFF3F78A64FD5AF0C48853DB8098EF07B58BB984123471`
 - 架构：仅 `arm64-v8a`
-- 签名：Android Debug RSA 2048，APK Signature Scheme v2 验证通过
+- 签名：Android Debug RSA 2048，APK Signature Scheme v2
 
 该 APK 可直接侧载用于验收和试用。正式提交应用商店前必须使用长期保存的正式发布证书重新签名。
 
 ## 版本与平台
 
 - Application ID：`com.limeday.app`
-- Version：`2.6.0`（versionCode `2600`）
+- Version：`2.7.0`（versionCode `2700`）
 - minSdk：26
 - targetSdk / compileSdk：36
 - Android Build Tools：36.0.0
@@ -25,33 +25,33 @@
 - Kotlin：2.3.20
 - JDK：17
 
-## 2.6.0 功能
+## 2.7.0 功能
 
-- 设置成为第三个底部一级页面，待办提醒、复盘提醒、回收站、模型服务、提示词、外观、数据、WebDAV 和关于集中分组管理。
-- 模型服务保留多配置加密存储，同一厂商可保存多份配置；卡片主体与固定自绘铅笔均可编辑，操作区支持自动换行。
-- 新建模型服务在首次保存前提供显式“手动获取模型”，仅在用户点击时联网；失败仍可手填模型并保存，未保存配置不会留下孤立缓存。
-- 总结历史逐条默认折叠，可独立展开且不持久化展开状态。
-- 待办日期卡片可打开当前所选月份的快速月历，支持立即跳转、回到今天和待办完成状态圆点。
-- 每日待办与复盘共用 6 秒删除撤销；连续删除合并成一个批次，一次撤销恢复整批。
-- 应用图标改为便签、对勾与青柠切片组成的涂鸦图形；底部导航、页面操作、下拉箭头和待办页顶部装饰均为 Compose Canvas 或自有矢量绘制。
-- 保持 Room schema 6、WebDAV JSON v1、四类 LLM 协议、16 个服务预设与最长 93 天范围总结兼容。
+- 应用内二级页使用提交后返回拦截：拖动阶段不改变 NavController 路由，取消保持当前页，提交后只返回一次；底部总结/设置返回待办，待办根页交给系统。
+- 待办新增独立截止日期/时间、时区、单项提醒、每天/工作日/每周/每月/自定义重复，完成重复事项时幂等生成下一实例。
+- 新增一级分组、固定收件箱、分组排序/重命名/软删除，以及可添加、修改、勾选、排序和删除的步骤。
+- 待办页新增当天、逾期、计划中智能视图，以及覆盖标题、备注和步骤的本地搜索；列表按分组折叠。
+- 智能总结总开关新安装默认关闭；关闭后复盘和总结页不显示生成入口，但保留历史只读，ViewModel 同样阻断网络生成。
+- 2.6 升级用户若已保存模型服务且从未明确选择开关，则首次迁移保持智能总结启用。
+- 回收站新增多选、全选、恢复所选、永久删除所选和清空；永久删除先确认，物理移除正文与步骤并保留最小同步墓碑。
+- Room schema 升到 7；WebDAV/导出写出 JSON v2，包含待办扩展字段、分组、步骤和墓碑；v2 缺失时可读取 v1 并迁移。
+- 顶层 Scaffold 不再重复消费状态栏 inset，减少待办标题上方空白；应用图标、页头装饰、可见图标和开关使用克制的儿童涂鸦语言。
 
 ## 自动化验证
 
 ### JVM 单元测试
 
-`testDebugUnitTest`：37 项通过，0 失败。
+`testDebugUnitTest`：45 项通过，0 失败。
 
-- 每日进度、月份状态、删除撤销提示、复盘旧数据映射和设置默认值：9 项。
-- 四协议响应解析、模型列表解析、地址候选、HTTP 安全开关、模型缓存、同厂商多配置与模拟网络请求：15 项。
-- 同步/备份 JSON、范围总结兼容与冲突合并：10 项。
-- HTTPS WebDAV 与首次同步流程：3 项。
+- 覆盖重复日期计算、智能总结开关默认/升级判定、四类 LLM 协议与模型缓存。
+- 覆盖 WebDAV v2、v1 回退迁移、分组/步骤序列化和永久删除墓碑版本合并。
+- 覆盖每日进度、复盘映射、撤销批次和 WebDAV HTTPS 请求流程。
 
 ### Android 测试
 
-- `assembleDebugAndroidTest`：通过，22 项测试代码及测试 APK 编译成功。
-- 覆盖 Room v1/v2/v3/v4/v5 到 v6 的迁移、回收站、待办手势与操作、三级主导航、快速月历、模型服务固定编辑/首次取模、默认折叠历史和 WebDAV 二级页。
-- SDK 36 与 platform-tools 安装在临时目录，但没有连接 Android 设备或 AVD，因此没有执行 `connectedDebugAndroidTest`；迁移与 Compose 仪器测试只完成了编译验证。
+- `assembleDebugAndroidTest`：通过，29 项测试代码及测试 APK 编译成功。
+- 覆盖 Room v1/v2/v3/v4/v5/v6 到 v7 的迁移、分组/步骤/截止/重复、搜索/逾期、回收站永久删除、智能总结隐藏、智能视图、分组折叠与提交后返回入口。
+- 本机构建时没有连接 Android 设备或 AVD，因此没有执行 `connectedDebugAndroidTest`；上述仪器测试只完成编译验证，未伪报为设备执行通过。
 
 ### Lint
 
@@ -61,21 +61,20 @@
 ## APK 检查
 
 - `assembleRelease` 与 release vital lint：通过。
-- `aapt dump badging`：Application ID、2.6.0 / 2600、minSdk 26、targetSdk 36 正确。
+- `aapt dump badging`：Application ID、2.7.0 / 2700、minSdk 26、targetSdk 36 正确。
 - APK 中仅包含 `arm64-v8a` 原生库。
 - `apksigner verify --verbose --print-certs`：v2 签名通过，签名者为开发交付用 Android Debug 证书。
 - `unzip -t`：压缩内容完整，无错误。
-- 生产源码凭据扫描：未发现硬编码 API Key、WebDAV 密码或私钥。
+- 生产源码凭据扫描：未发现硬编码 GitHub token、LLM API Key、WebDAV 密码或私钥。
 
 ## 分支与发布
 
 - `legacy/android-kotlin-1.1`：旧 Kotlin 1.1 实现。
 - `legacy/flutter-2.0`：Flutter 2.0 实现。
-- `main`：当前 Kotlin/Compose 2.6.0 实现。
-- 标签与公开 GitHub Release：`v2.6.0`。
+- `main`：当前 Kotlin/Compose 2.7.0 实现。
+- 目标标签与公开 GitHub Release：`v2.7.0`。
 
 ## 构建缓存清理
 
-- 发布 APK、测试结果与报告落盘后停止 Gradle daemon。
-- 删除项目 `.gradle`、`app/build` 和本次专用的 `/private/tmp/android-sdk`；不清理可复用于其他项目的用户级 `~/.gradle` 缓存。
-- 清理对象约 484 MB，后续本机构建需重新配置可用 Android SDK 36。
+- 发布 APK、测试结果与报告落盘后停止 Gradle daemon 与 ADB。
+- 删除项目 `.gradle`、`app/build` 和 `.kotlin` 会话缓存；保留项目 `.toolchain/android-sdk` 与用户级 `~/.gradle` 作为可复用工具链。

@@ -21,7 +21,6 @@ import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TimePicker
@@ -48,6 +47,7 @@ fun SettingsScreen(
     notificationPermissionGranted: Boolean,
     onRequestNotificationPermission: () -> Unit,
     onSetThemeMode: (ThemeMode) -> Unit,
+    onSetLlmEnabled: (Boolean) -> Unit,
     onSetTodoReminder: (Boolean, Int, Int) -> Unit,
     onSetReviewReminder: (Boolean, Int, Int) -> Unit,
     onRequestExport: () -> Unit,
@@ -142,6 +142,23 @@ fun SettingsScreen(
             item { HorizontalDivider(Modifier.padding(vertical = 4.dp)) }
             item { SectionTitle(DoodleIconType.Summary, "总结设置") }
             item {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        Text("启用智能总结", style = MaterialTheme.typography.titleMedium)
+                        Text(
+                            if (settings.llmEnabled) "每日与范围总结可主动调用模型服务" else "已关闭，不会向模型服务发送记录",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    DoodleSwitch(checked = settings.llmEnabled, onCheckedChange = onSetLlmEnabled)
+                }
+            }
+            item {
                 SettingsNavigationRow(
                     icon = DoodleIconType.Summary,
                     title = "模型服务",
@@ -226,7 +243,7 @@ fun SettingsScreen(
             item {
                 val context = LocalContext.current
                 val version = remember {
-                    context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: "2.6.0"
+                    context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: "2.7.0"
                 }
                 Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text("青柠日记 $version", style = MaterialTheme.typography.titleMedium)
@@ -323,7 +340,7 @@ private fun ReminderRow(
         IconButton(onClick = onEditTime) {
             DoodleIcon(DoodleIconType.Calendar, "设置${title}时间", Modifier.size(23.dp), MaterialTheme.colorScheme.primary)
         }
-        Switch(checked = enabled, onCheckedChange = onToggle)
+        DoodleSwitch(checked = enabled, onCheckedChange = onToggle)
     }
 }
 

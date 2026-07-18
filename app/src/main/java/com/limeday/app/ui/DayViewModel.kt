@@ -12,6 +12,9 @@ import com.limeday.app.data.LimeDayRepository
 import com.limeday.app.data.RangeSourceData
 import com.limeday.app.data.RangeSummary
 import com.limeday.app.data.TodoItem
+import com.limeday.app.data.TodoEdit
+import com.limeday.app.data.TodoGroup
+import com.limeday.app.data.TodoStep
 import com.limeday.app.llm.LlmClient
 import com.limeday.app.llm.LlmModelCache
 import com.limeday.app.llm.LlmServiceConfig
@@ -21,6 +24,7 @@ import com.limeday.app.settings.AppSettings
 import com.limeday.app.settings.AppSettingsStore
 import com.limeday.app.settings.DailyReminderWorker
 import com.limeday.app.settings.ThemeMode
+import com.limeday.app.settings.TodoReminderWorker
 import com.limeday.app.sync.SecureWebDavConfigStore
 import com.limeday.app.sync.WebDavClient
 import com.limeday.app.sync.WebDavConfig
@@ -41,6 +45,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -49,6 +54,11 @@ import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 data class DayUiState(
     val selectedDate: LocalDate = LocalDate.now(),
     val todos: List<TodoItem> = emptyList(),
+    val displayedTodos: List<TodoItem> = emptyList(),
+    val todoGroups: List<TodoGroup> = emptyList(),
+    val todoSteps: List<TodoStep> = emptyList(),
+    val todoViewMode: TodoViewMode = TodoViewMode.DAY,
+    val todoSearchQuery: String = "",
     val deletedTodos: List<TodoItem> = emptyList(),
     val review: DailyReview? = null,
     val summary: DailySummary? = null,
@@ -78,9 +88,18 @@ data class DayUiState(
     val activeLlmProvider: LlmServiceConfig? get() = llmSettings.activeProvider
 }
 
+enum class TodoViewMode(val label: String) {
+    DAY("当天"),
+    OVERDUE("逾期"),
+    PLANNED("计划中")
+}
+
 data class MonthTodoStatus(val total: Int, val completed: Int) {
     val allCompleted: Boolean get() = total > 0 && completed == total
 }
+
+internal fun shouldEnableLlmForUpgrade(hasExplicitSetting: Boolean, savedProviderCount: Int): Boolean =
+    !hasExplicitSetting && savedProviderCount > 0
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class DayViewModel(
@@ -110,22 +129,53 @@ class DayViewModel(
     private val metadata = MutableStateFlow<AppMetadata?>(null)
     private val dataMessage = MutableStateFlow<String?>(null)
     private val monthTodoStatuses = MutableStateFlow<Map<LocalDate, MonthTodoStatus>>(emptyMap())
+    private val todoViewMode = MutableStateFlow(TodoViewMode.DAY)
+    private val todoSearchQuery = MutableStateFlow("")
     private var reviewSaveJob: Job? = null
     private var summaryJob: Job? = null
     private var rangeSummaryJob: Job? = null
     private var modelFetchJob: Job? = null
     private var reviewDirty = false
 
+    init {
+        if (shouldEnableLlmForUpgrade(appSettingsStore.hasExplicitLlmSetting, llmSettings.value.providers.size)) {
+            appSettingsStore.setLlmEnabled(true)
+        }
+    }
+
     private val todos = selectedDate.flatMapLatest { repository.observeTodos(it.toString()) }
     private val storedReview = selectedDate.flatMapLatest { repository.observeReview(it.toString()) }
     private val storedSummary = selectedDate.flatMapLatest { repository.observeSummary(it.toString()) }
     private val deletedTodos = repository.observeDeletedTodos()
     private val rangeSummaries = repository.observeRangeSummaries()
+    private val groups = repository.observeGroups()
+    private val steps = repository.observeSteps()
 
-    private val dayContent = combine(selectedDate, todos, storedReview, reviewDraft) { date, items, stored, draft ->
+    private val displayedTodos = combine(todoViewMode, todoSearchQuery, selectedDate) { mode, query, date ->
+        Triple(mode, query.trim(), date)
+    }.flatMapLatest { (mode, query, date) ->
+        when {
+            query.isNotBlank() -> repository.searchTodos(query)
+            mode == TodoViewMode.DAY -> repository.observeTodos(date.toString())
+            mode == TodoViewMode.OVERDUE -> repository.overdueTodos()
+            mode == TodoViewMode.PLANNED -> repository.plannedTodos()
+            else -> flowOf(emptyList())
+        }
+    }
+
+    private val todoPresentation = combine(groups, steps, displayedTodos, todoViewMode, todoSearchQuery) { groupList, stepList, visible, mode, query ->
+        TodoPresentation(groupList, stepList, visible, mode, query)
+    }
+
+    private val dayContent = combine(selectedDate, todos, storedReview, reviewDraft, todoPresentation) { date, items, stored, draft, presentation ->
         DayUiState(
             selectedDate = date,
             todos = items,
+            displayedTodos = presentation.todos,
+            todoGroups = presentation.groups,
+            todoSteps = presentation.steps,
+            todoViewMode = presentation.mode,
+            todoSearchQuery = presentation.query,
             review = draft?.takeIf { it.date == date.toString() } ?: stored,
             isLoading = false
         )
@@ -194,6 +244,7 @@ class DayViewModel(
                 }
         }
         refreshMetadata()
+        rescheduleTodoReminders()
     }
 
     fun previousDay() = selectDate(selectedDate.value.minusDays(1))
@@ -204,6 +255,15 @@ class DayViewModel(
         flushReview()
         selectedDate.value = date
         reviewDraft.value = null
+    }
+
+    fun setTodoViewMode(mode: TodoViewMode) {
+        todoViewMode.value = mode
+        if (mode != TodoViewMode.DAY) todoSearchQuery.value = ""
+    }
+
+    fun setTodoSearchQuery(query: String) {
+        todoSearchQuery.value = query.take(80)
     }
 
     fun loadMonthTodoStatuses(date: LocalDate) {
@@ -228,14 +288,49 @@ class DayViewModel(
         viewModelScope.launch { repository.updateTodo(todo, cleanTitle, note.take(300)) }
     }
 
-    fun toggleTodo(todo: TodoItem) = viewModelScope.launch { repository.setTodoCompleted(todo, !todo.isCompleted) }
+    fun toggleTodo(todo: TodoItem) = viewModelScope.launch {
+        val next = repository.setTodoCompleted(todo, !todo.isCompleted)
+        repository.todoById(todo.id)?.let { TodoReminderWorker.schedule(application, it) }
+        next?.let { TodoReminderWorker.schedule(application, it) }
+    }
     fun setTodoPriority(todo: TodoItem, priority: Int) = viewModelScope.launch { repository.setTodoPriority(todo, priority) }
     fun moveTodo(todo: TodoItem, date: LocalDate) = viewModelScope.launch { repository.moveTodo(todo, date.toString()) }
-    fun duplicateTodo(todo: TodoItem) = viewModelScope.launch { repository.duplicateTodo(todo) }
-    fun deleteTodo(todo: TodoItem) = viewModelScope.launch { repository.deleteTodo(todo) }
-    fun restoreTodo(todo: TodoItem) = viewModelScope.launch { repository.restoreTodo(todo) }
+    fun duplicateTodo(todo: TodoItem) = viewModelScope.launch {
+        TodoReminderWorker.schedule(application, repository.duplicateTodo(todo))
+    }
+    fun deleteTodo(todo: TodoItem) = viewModelScope.launch {
+        repository.deleteTodo(todo)
+        TodoReminderWorker.cancel(application, todo.id)
+    }
+    fun restoreTodo(todo: TodoItem) = viewModelScope.launch {
+        repository.restoreTodo(todo)
+        repository.todoById(todo.id)?.let { TodoReminderWorker.schedule(application, it) }
+    }
+
+    fun updateTodo(todo: TodoItem, edit: TodoEdit) = viewModelScope.launch {
+        TodoReminderWorker.schedule(application, repository.updateTodo(todo, edit))
+    }
+
+    fun addTodoStep(todoId: String, title: String) = viewModelScope.launch { repository.addStep(todoId, title) }
+    fun toggleTodoStep(step: TodoStep) = viewModelScope.launch { repository.updateStep(step, completed = !step.isCompleted) }
+    fun updateTodoStep(step: TodoStep, title: String) = viewModelScope.launch { repository.updateStep(step, title = title) }
+    fun moveTodoStep(step: TodoStep, offset: Int) = viewModelScope.launch { repository.moveStep(step, offset) }
+    fun deleteTodoStep(step: TodoStep) = viewModelScope.launch { repository.deleteStep(step) }
+    fun addTodoGroup(name: String, iconKey: String, colorKey: String) = viewModelScope.launch {
+        repository.addGroup(name, iconKey, colorKey)
+    }
+    fun updateTodoGroup(group: TodoGroup, name: String, iconKey: String, colorKey: String) = viewModelScope.launch {
+        repository.updateGroup(group, name, iconKey, colorKey)
+    }
+    fun deleteTodoGroup(group: TodoGroup) = viewModelScope.launch { repository.deleteGroup(group) }
+    fun moveTodoGroup(group: TodoGroup, offset: Int) = viewModelScope.launch { repository.moveGroup(group, offset) }
+    fun permanentlyDeleteTodos(todos: Collection<TodoItem>) = viewModelScope.launch {
+        todos.forEach { TodoReminderWorker.cancel(application, it.id) }
+        repository.permanentlyDeleteTodos(todos)
+    }
 
     fun setThemeMode(mode: ThemeMode) = appSettingsStore.setThemeMode(mode)
+    fun setLlmEnabled(enabled: Boolean) = appSettingsStore.setLlmEnabled(enabled)
 
     fun setTodoReminder(enabled: Boolean, hour: Int, minute: Int) {
         appSettingsStore.setTodoReminder(enabled, hour, minute)
@@ -283,6 +378,7 @@ class DayViewModel(
                     bytes.toString(Charsets.UTF_8)
                 }
                 repository.importJson(value)
+                rescheduleTodoRemindersNow()
             }.onSuccess {
                 dataMessage.value = "数据导入完成，已按更新时间合并"
             }.onFailure {
@@ -459,6 +555,10 @@ class DayViewModel(
 
     fun generateSummary(instruction: String, providerId: String? = null, modelOverride: String = "") {
         val state = uiState.value
+        if (!state.appSettings.llmEnabled) {
+            summaryError.value = "智能总结已关闭，请先在设置中开启"
+            return
+        }
         val provider = resolveProvider(providerId, modelOverride) ?: run {
             summaryError.value = "请先配置可用的模型服务"
             return
@@ -505,6 +605,10 @@ class DayViewModel(
         providerId: String? = null,
         modelOverride: String = ""
     ) {
+        if (!appSettingsStore.settings.value.llmEnabled) {
+            rangeSummaryError.value = "智能总结已关闭，请先在设置中开启"
+            return
+        }
         val days = ChronoUnit.DAYS.between(start, end) + 1
         val provider = resolveProvider(providerId, modelOverride) ?: run {
             rangeSummaryError.value = "请先配置可用的模型服务"
@@ -634,7 +738,10 @@ class DayViewModel(
             isSyncing.value = true
             syncMessage.value = null
             runCatching { syncCoordinator.sync(config.normalized) }
-                .onSuccess { syncMessage.value = it.message }
+                .onSuccess {
+                    syncMessage.value = it.message
+                    rescheduleTodoRemindersNow()
+                }
                 .onFailure { error ->
                     val message = error.message ?: "同步失败"
                     repository.recordSync(message)
@@ -647,6 +754,14 @@ class DayViewModel(
 
     private fun refreshMetadata() {
         viewModelScope.launch { metadata.value = repository.metadata() }
+    }
+
+    private fun rescheduleTodoReminders() {
+        viewModelScope.launch { rescheduleTodoRemindersNow() }
+    }
+
+    private suspend fun rescheduleTodoRemindersNow() {
+        repository.activeReminderTodos().forEach { TodoReminderWorker.schedule(application, it) }
     }
 
     private fun buildDailySummaryPrompt(state: DayUiState, instruction: String): String = buildString {
@@ -724,6 +839,14 @@ class DayViewModel(
     )
 
     private data class LocalSettingsState(val settings: AppSettings, val dataMessage: String?)
+
+    private data class TodoPresentation(
+        val groups: List<TodoGroup>,
+        val steps: List<TodoStep>,
+        val todos: List<TodoItem>,
+        val mode: TodoViewMode,
+        val query: String
+    )
 
     companion object {
         private const val MAX_BACKUP_BYTES = 10_000_000

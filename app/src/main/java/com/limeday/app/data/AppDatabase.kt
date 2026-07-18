@@ -9,8 +9,8 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 import java.util.UUID
 
 @Database(
-    entities = [TodoItem::class, DailyReview::class, DailySummary::class, RangeSummary::class, AppMetadata::class],
-    version = 6,
+    entities = [TodoItem::class, TodoGroup::class, TodoStep::class, TodoTombstone::class, DailyReview::class, DailySummary::class, RangeSummary::class, AppMetadata::class],
+    version = 7,
     exportSchema = true
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -24,11 +24,12 @@ abstract class AppDatabase : RoomDatabase() {
                 context.applicationContext,
                 AppDatabase::class.java,
                 "lime_day.db"
-            ).addMigrations(MIGRATION_1_4, MIGRATION_2_4, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
+            ).addMigrations(MIGRATION_1_4, MIGRATION_2_4, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7)
                 .addCallback(object : Callback() {
                     override fun onCreate(db: SupportSQLiteDatabase) {
                         super.onCreate(db)
                         insertMetadata(db, legacyVersion = 0)
+                        insertInbox(db)
                     }
                 })
                 .build()
@@ -78,6 +79,72 @@ abstract class AppDatabase : RoomDatabase() {
                 )
                 db.execSQL("CREATE INDEX IF NOT EXISTS range_summaries_start_idx ON range_summaries(range_start)")
                 db.execSQL("UPDATE app_metadata SET schema_version_value = 6 WHERE id = 1")
+            }
+        }
+
+        internal val MIGRATION_6_7 = object : Migration(6, 7) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE todos ADD COLUMN group_id TEXT NOT NULL DEFAULT '${TodoDefaults.INBOX_GROUP_ID}'")
+                db.execSQL("ALTER TABLE todos ADD COLUMN due_date TEXT")
+                db.execSQL("ALTER TABLE todos ADD COLUMN due_time TEXT")
+                db.execSQL("ALTER TABLE todos ADD COLUMN due_at INTEGER")
+                db.execSQL("ALTER TABLE todos ADD COLUMN due_zone_id TEXT")
+                db.execSQL("ALTER TABLE todos ADD COLUMN reminder_at INTEGER")
+                db.execSQL("ALTER TABLE todos ADD COLUMN recurrence TEXT NOT NULL DEFAULT 'none'")
+                db.execSQL("ALTER TABLE todos ADD COLUMN recurrence_source_id TEXT")
+                db.execSQL(
+                    """CREATE TABLE IF NOT EXISTS todo_groups (
+                        id TEXT NOT NULL,
+                        name TEXT NOT NULL,
+                        icon_key TEXT NOT NULL DEFAULT 'leaf',
+                        color_key TEXT NOT NULL DEFAULT 'mint',
+                        sort_order TEXT NOT NULL,
+                        is_inbox INTEGER NOT NULL DEFAULT 0,
+                        created_at INTEGER NOT NULL,
+                        updated_at INTEGER NOT NULL,
+                        deleted_at INTEGER,
+                        device_id TEXT NOT NULL,
+                        revision INTEGER NOT NULL DEFAULT 1,
+                        PRIMARY KEY(id)
+                    )""".trimIndent()
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS todo_groups_sort_idx ON todo_groups(sort_order)")
+                db.execSQL(
+                    """CREATE TABLE IF NOT EXISTS todo_steps (
+                        id TEXT NOT NULL,
+                        todo_id TEXT NOT NULL,
+                        title TEXT NOT NULL,
+                        is_completed INTEGER NOT NULL DEFAULT 0,
+                        sort_order TEXT NOT NULL,
+                        created_at INTEGER NOT NULL,
+                        updated_at INTEGER NOT NULL,
+                        deleted_at INTEGER,
+                        device_id TEXT NOT NULL,
+                        revision INTEGER NOT NULL DEFAULT 1,
+                        PRIMARY KEY(id)
+                    )""".trimIndent()
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS todo_steps_todo_idx ON todo_steps(todo_id)")
+                db.execSQL(
+                    """CREATE TABLE IF NOT EXISTS todo_tombstones (
+                        todo_id TEXT NOT NULL,
+                        updated_at INTEGER NOT NULL,
+                        deleted_at INTEGER NOT NULL,
+                        device_id TEXT NOT NULL,
+                        revision INTEGER NOT NULL DEFAULT 1,
+                        PRIMARY KEY(todo_id)
+                    )""".trimIndent()
+                )
+                db.execSQL(
+                    """INSERT OR IGNORE INTO todo_groups
+                        (id, name, icon_key, color_key, sort_order, is_inbox, created_at, updated_at, deleted_at, device_id, revision)
+                        SELECT '${TodoDefaults.INBOX_GROUP_ID}', '收件箱', 'inbox', 'mint', '00000000000000000000-inbox', 1,
+                               CAST(strftime('%s','now') AS INTEGER) * 1000,
+                               CAST(strftime('%s','now') AS INTEGER) * 1000,
+                               NULL, device_id, 1
+                        FROM app_metadata WHERE id = 1""".trimIndent()
+                )
+                db.execSQL("UPDATE app_metadata SET schema_version_value = 7 WHERE id = 1")
             }
         }
 
@@ -152,11 +219,23 @@ abstract class AppDatabase : RoomDatabase() {
             db: SupportSQLiteDatabase,
             deviceId: String = UUID.randomUUID().toString(),
             legacyVersion: Int,
-            schemaVersion: Int = 6
+            schemaVersion: Int = 7
         ) {
             db.execSQL(
                 "INSERT OR IGNORE INTO app_metadata (id, device_id, schema_version_value, legacy_migration_version, last_sync_status) VALUES (1, ?, ?, ?, '')",
                 arrayOf<Any>(deviceId, schemaVersion, legacyVersion)
+            )
+        }
+
+        private fun insertInbox(db: SupportSQLiteDatabase) {
+            db.execSQL(
+                """INSERT OR IGNORE INTO todo_groups
+                    (id, name, icon_key, color_key, sort_order, is_inbox, created_at, updated_at, deleted_at, device_id, revision)
+                    SELECT '${TodoDefaults.INBOX_GROUP_ID}', '收件箱', 'inbox', 'mint', '00000000000000000000-inbox', 1,
+                           CAST(strftime('%s','now') AS INTEGER) * 1000,
+                           CAST(strftime('%s','now') AS INTEGER) * 1000,
+                           NULL, device_id, 1
+                    FROM app_metadata WHERE id = 1""".trimIndent()
             )
         }
     }

@@ -35,16 +35,8 @@ class WebDavClient(
 
     suspend fun download(config: WebDavConfig): SyncSnapshot? = withContext(Dispatchers.IO) {
         val value = requireConfig(config)
-        val request = Request.Builder().url(fileUrl(value)).get().authorized(value).build()
         try {
-            httpClient.newCall(request).execute().use { response ->
-                if (response.code == 404) return@withContext null
-                if (!response.isSuccessful) throw httpError(response.code)
-                val body = response.body.string()
-                if (body.length > MAX_SNAPSHOT_CHARS) throw WebDavException("远端同步文件过大")
-                runCatching { SyncSnapshot.fromJson(body) }
-                    .getOrElse { throw WebDavException(it.message ?: "远端同步文件无法解析") }
-            }
+            downloadFile(value, FILE_NAME_V2) ?: downloadFile(value, FILE_NAME_V1)
         } catch (error: WebDavException) {
             throw error
         } catch (_: IOException) {
@@ -55,7 +47,7 @@ class WebDavClient(
     suspend fun upload(config: WebDavConfig, snapshot: SyncSnapshot) = withContext(Dispatchers.IO) {
         val value = requireConfig(config)
         ensureDirectories(value)
-        val request = Request.Builder().url(fileUrl(value))
+        val request = Request.Builder().url(fileUrl(value, FILE_NAME_V2))
             .put(snapshot.toJson().toRequestBody(JSON))
             .authorized(value)
             .build()
@@ -74,10 +66,22 @@ class WebDavClient(
         }
     }
 
-    private fun fileUrl(config: WebDavConfig): HttpUrl {
+    private fun downloadFile(config: WebDavConfig, fileName: String): SyncSnapshot? {
+        val request = Request.Builder().url(fileUrl(config, fileName)).get().authorized(config).build()
+        httpClient.newCall(request).execute().use { response ->
+            if (response.code == 404) return null
+            if (!response.isSuccessful) throw httpError(response.code)
+            val body = response.body.string()
+            if (body.length > MAX_SNAPSHOT_CHARS) throw WebDavException("远端同步文件过大")
+            return runCatching { SyncSnapshot.fromJson(body) }
+                .getOrElse { throw WebDavException(it.message ?: "远端同步文件无法解析") }
+        }
+    }
+
+    private fun fileUrl(config: WebDavConfig, fileName: String): HttpUrl {
         val builder = config.baseUrl.toHttpUrl().newBuilder()
         config.directory.split('/').filter(String::isNotBlank).forEach(builder::addPathSegment)
-        return builder.addPathSegment(FILE_NAME).build()
+        return builder.addPathSegment(fileName).build()
     }
 
     private fun execute(request: Request, allowed: Iterable<Int>) {
@@ -111,7 +115,8 @@ class WebDavClient(
         header("Authorization", Credentials.basic(config.username, config.password))
 
     companion object {
-        private const val FILE_NAME = "limeday-sync-v1.json"
+        private const val FILE_NAME_V2 = "limeday-sync-v2.json"
+        private const val FILE_NAME_V1 = "limeday-sync-v1.json"
         private const val MAX_SNAPSHOT_CHARS = 10_000_000
         private val JSON = "application/json; charset=utf-8".toMediaType()
         private val XML = "application/xml; charset=utf-8".toMediaType()
