@@ -138,6 +138,37 @@ class DatabaseMigrationTest {
         database.close()
     }
 
+    @Test
+    fun legacyGroupIconsNormalizeOnceWithoutChangingIdsOrTodoReferences() = runBlocking {
+        val database = Room.inMemoryDatabaseBuilder(context, AppDatabase::class.java).build()
+        val dao = database.limeDayDao()
+        dao.upsertGroup(
+            TodoGroup(
+                id = TodoDefaults.INBOX_GROUP_ID,
+                name = "日常",
+                iconKey = "daily",
+                isInbox = true,
+                sortOrder = "0",
+                deviceId = "old-device"
+            )
+        )
+        dao.upsertGroup(TodoGroup(id = "legacy-a", name = "工作", iconKey = "folder", sortOrder = "1", deviceId = "old-device", revision = 3))
+        dao.upsertGroup(TodoGroup(id = "legacy-b", name = "学习", iconKey = "", sortOrder = "2", deviceId = "old-device", revision = 7))
+        dao.upsertTodo(TodoItem(id = "linked", date = "2026-07-18", title = "关联待办", groupId = "legacy-a", sortOrder = "0", deviceId = "old-device"))
+        val repository = LimeDayRepository(database)
+
+        assertEquals(2, repository.normalizeLegacyGroupIcons())
+        val normalized = dao.allGroups().associateBy(TodoGroup::id)
+        assertEquals("work", normalized.getValue("legacy-a").iconKey)
+        assertEquals("study", normalized.getValue("legacy-b").iconKey)
+        assertEquals(4, normalized.getValue("legacy-a").revision)
+        assertEquals(8, normalized.getValue("legacy-b").revision)
+        assertEquals("legacy-a", dao.todoById("linked")!!.groupId)
+        assertEquals(0, repository.normalizeLegacyGroupIcons())
+        assertEquals(4, dao.groupById("legacy-a")!!.revision)
+        database.close()
+    }
+
     private fun openMigratedDatabase(version: Int): AppDatabase {
         val name = "migration-$version-${System.nanoTime()}.db"
         databaseNames += name

@@ -111,19 +111,13 @@ private fun DrawScope.drawDoodleIcon(type: DoodleIconType, tint: Color, accent: 
             path(listOf(12.1f to 3.4f, 14.2f to 9.1f, 20.2f to 10.2f, 15.1f to 13.5f, 15.9f to 19.5f, 11.2f to 15.8f, 5.7f to 18.4f, 7.8f to 12.8f, 3.6f to 8.8f, 9.5f to 9.1f), closed = true)
         }
         DoodleIconType.Settings -> {
-            if (accent.alpha > 0f) drawCircle(accent, 4.3f * unit, p(16.7f, 7.1f))
-            drawCircle(tint, 3.2f * unit, p(12f, 12f), style = stroke)
-            drawCircle(tint, 7.2f * unit, p(12f, 12f), style = fine)
-            repeat(8) { index ->
-                val angle = index * PI.toFloat() / 4f - PI.toFloat() / 2f
-                line(
-                    12f + cos(angle) * 7.3f,
-                    12f + sin(angle) * 7.3f,
-                    12f + cos(angle) * 9.4f,
-                    12f + sin(angle) * 9.4f,
-                    fine
-                )
-            }
+            if (accent.alpha > 0f) drawCircle(accent, 4f * unit, p(17.1f, 6.8f))
+            line(4.1f, 6.8f, 19.8f, 6.5f, fine)
+            line(4.2f, 12.2f, 19.6f, 12.5f, fine)
+            line(4f, 18.1f, 19.9f, 17.7f, fine)
+            drawCircle(tint, 2.15f * unit, p(8.1f, 6.7f), style = stroke)
+            drawCircle(tint, 2.15f * unit, p(15.9f, 12.4f), style = stroke)
+            drawCircle(tint, 2.15f * unit, p(10.8f, 18f), style = stroke)
         }
         DoodleIconType.Back -> path(listOf(18.5f to 5.4f, 10.8f to 12f, 18.2f to 18.6f, 10.8f to 12f, 4.2f to 12.4f))
         DoodleIconType.Forward, DoodleIconType.ChevronRight -> path(listOf(5.5f to 5.6f, 13.2f to 12f, 5.8f to 18.5f, 13.2f to 12f, 19.5f to 12.3f))

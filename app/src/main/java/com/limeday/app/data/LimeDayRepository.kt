@@ -29,10 +29,14 @@ class LimeDayRepository(private val database: AppDatabase) {
 
     suspend fun ensureDefaultGroupName(): Boolean = database.withTransaction {
         val group = dao.groupById(TodoDefaults.INBOX_GROUP_ID) ?: return@withTransaction false
-        if (!group.isInbox || group.deletedAt != null || group.name != "收件箱") return@withTransaction false
+        if (!group.isInbox || group.deletedAt != null) return@withTransaction false
+        val nextName = if (group.name == "收件箱") "日常" else group.name
+        val nextIcon = TodoGroupIconCatalog.DAILY
+        if (group.name == nextName && group.iconKey == nextIcon) return@withTransaction false
         dao.upsertGroup(
             group.copy(
-                name = "日常",
+                name = nextName,
+                iconKey = nextIcon,
                 updatedAt = System.currentTimeMillis(),
                 deviceId = deviceId(),
                 revision = group.revision + 1
@@ -41,14 +45,36 @@ class LimeDayRepository(private val database: AppDatabase) {
         true
     }
 
+    suspend fun normalizeLegacyGroupIcons(): Int = database.withTransaction {
+        val groups = dao.allGroups().sortedWith(compareBy<TodoGroup> { it.sortOrder }.thenBy { it.id })
+        val assignments = TodoGroupIconCatalog.legacyAssignments(groups)
+        if (assignments.isEmpty()) return@withTransaction 0
+        val currentDevice = deviceId()
+        val now = System.currentTimeMillis()
+        val updated = groups.mapNotNull { group ->
+            assignments[group.id]?.let { key ->
+                group.copy(iconKey = key, updatedAt = now, deviceId = currentDevice, revision = group.revision + 1)
+            }
+        }
+        dao.upsertGroups(updated)
+        updated.size
+    }
+
     suspend fun deviceId(): String = ensureMetadata().deviceId
 
-    suspend fun addTodo(date: String, title: String, note: String = ""): TodoItem {
+    suspend fun addTodo(
+        date: String,
+        title: String,
+        note: String = "",
+        groupId: String = TodoDefaults.INBOX_GROUP_ID
+    ): TodoItem {
         val now = System.currentTimeMillis()
+        val targetGroupId = dao.groupById(groupId)?.takeIf { it.deletedAt == null }?.id ?: TodoDefaults.INBOX_GROUP_ID
         val todo = TodoItem(
                 date = date,
                 title = title.trim(),
                 note = note.trim(),
+                groupId = targetGroupId,
                 sortOrder = "%020d-%s".format(now, UUID.randomUUID()),
                 createdAt = now,
                 updatedAt = now,
@@ -160,11 +186,13 @@ class LimeDayRepository(private val database: AppDatabase) {
         )
     }
 
-    suspend fun addGroup(name: String, iconKey: String = "leaf", colorKey: String = "mint"): TodoGroup {
+    suspend fun addGroup(name: String, iconKey: String = "", colorKey: String = "mint"): TodoGroup {
         val now = System.currentTimeMillis()
+        val resolvedIconKey = iconKey.takeIf { it in TodoGroupIconCatalog.selectableKeys }
+            ?: TodoGroupIconCatalog.nextAvailable(dao.allGroups())
         val group = TodoGroup(
             name = name.trim().take(40),
-            iconKey = iconKey,
+            iconKey = resolvedIconKey,
             colorKey = colorKey,
             sortOrder = "%020d-%s".format(now, UUID.randomUUID()),
             createdAt = now,
@@ -444,16 +472,24 @@ class LimeDayRepository(private val database: AppDatabase) {
             dao.deleteTodosById(suppressedIds)
         }
         dao.upsertTodos(merged.todos)
-        val normalizedGroups = merged.groups.map { group ->
-            if (group.id == TodoDefaults.INBOX_GROUP_ID && group.isInbox && group.deletedAt == null && group.name == "收件箱") {
+        val normalizationTime = System.currentTimeMillis()
+        val normalizationDevice = deviceId()
+        val legacyAssignments = TodoGroupIconCatalog.legacyAssignments(merged.groups)
+        val normalizedById = merged.groups.associate { group ->
+            val isDefault = group.id == TodoDefaults.INBOX_GROUP_ID && group.isInbox && group.deletedAt == null
+            val normalizedIcon = if (isDefault) TodoGroupIconCatalog.DAILY else legacyAssignments[group.id] ?: group.iconKey
+            val normalizedName = if (isDefault && group.name == "收件箱") "日常" else group.name
+            group.id to if (normalizedName != group.name || normalizedIcon != group.iconKey) {
                 group.copy(
-                    name = "日常",
-                    updatedAt = System.currentTimeMillis(),
-                    deviceId = deviceId(),
+                    name = normalizedName,
+                    iconKey = normalizedIcon,
+                    updatedAt = normalizationTime,
+                    deviceId = normalizationDevice,
                     revision = group.revision + 1
                 )
             } else group
         }
+        val normalizedGroups = merged.groups.map { normalizedById.getValue(it.id) }
         dao.upsertGroups(normalizedGroups)
         dao.upsertSteps(merged.steps)
         dao.upsertTodoTombstones(merged.todoTombstones)

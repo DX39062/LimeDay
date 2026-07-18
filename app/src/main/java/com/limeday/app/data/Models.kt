@@ -28,6 +28,48 @@ object TodoDefaults {
     const val INBOX_GROUP_ID = "00000000-0000-4000-8000-000000000001"
 }
 
+object TodoGroupIconCatalog {
+    const val DAILY = "daily"
+    val keys = listOf(
+        DAILY, "work", "study", "home", "health", "shopping", "finance", "travel",
+        "idea", "project", "habit", "reading", "sport", "chores", "social", "other"
+    )
+    val selectableKeys: List<String> = keys.drop(1)
+    val legacyPlaceholderKeys = setOf("", "folder", "leaf")
+
+    fun displayKey(value: String, isInbox: Boolean = false): String = when {
+        isInbox -> DAILY
+        value in keys -> value
+        else -> "other"
+    }
+
+    fun nextAvailable(groups: List<TodoGroup>): String {
+        val used = groups.asSequence()
+            .filter { it.deletedAt == null && !it.isInbox }
+            .map { displayKey(it.iconKey) }
+            .toSet()
+        return selectableKeys.firstOrNull { it !in used }
+            ?: selectableKeys[groups.count { it.deletedAt == null && !it.isInbox } % selectableKeys.size]
+    }
+
+    fun legacyAssignments(groups: List<TodoGroup>): Map<String, String> {
+        val sorted = groups.sortedWith(compareBy<TodoGroup> { it.sortOrder }.thenBy { it.id })
+        val used = sorted.asSequence()
+            .filter { !it.isInbox && it.iconKey !in legacyPlaceholderKeys }
+            .map { displayKey(it.iconKey) }
+            .toMutableSet()
+        var repeatedIndex = 0
+        return buildMap {
+            sorted.filter { !it.isInbox && it.iconKey in legacyPlaceholderKeys }.forEach { group ->
+                val key = selectableKeys.firstOrNull { it !in used }
+                    ?: selectableKeys[repeatedIndex++ % selectableKeys.size]
+                used += key
+                put(group.id, key)
+            }
+        }
+    }
+}
+
 object TodoRecurrence {
     const val NONE = "none"
     const val DAILY = "daily"

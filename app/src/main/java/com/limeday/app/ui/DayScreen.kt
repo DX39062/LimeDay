@@ -19,8 +19,12 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.IconButton
@@ -63,6 +67,7 @@ import com.limeday.app.data.TodoEdit
 import com.limeday.app.data.TodoGroup
 import com.limeday.app.data.TodoStep
 import com.limeday.app.data.TodoDefaults
+import com.limeday.app.data.TodoGroupIconCatalog
 import java.time.LocalDate
 import java.time.YearMonth
 import java.time.format.DateTimeFormatter
@@ -78,7 +83,7 @@ fun DayScreen(
     onPreviousDay: () -> Unit,
     onNextDay: () -> Unit,
     onToday: () -> Unit,
-    onAddTodo: (String) -> Unit,
+    onAddTodo: (String, String) -> Unit,
     onToggleTodo: (TodoItem) -> Unit,
     onUpdateTodo: (TodoItem, TodoEdit) -> Unit,
     onAddStep: (String, String) -> Unit,
@@ -164,7 +169,9 @@ fun DayScreen(
                 if (state.todoViewMode == TodoViewMode.DAY && state.todoSearchQuery.isBlank()) {
                     item { ProgressPanel(state) }
                 }
-                if (state.todoViewMode == TodoViewMode.DAY && state.todoSearchQuery.isBlank()) item { QuickAdd(onAddTodo) }
+                if (state.todoViewMode == TodoViewMode.DAY && state.todoSearchQuery.isBlank()) {
+                    item { QuickAdd(state.todoGroups, { showGroupManager = true }, onAddTodo) }
+                }
                 if (state.displayedTodos.isEmpty()) {
                     item { EmptyTodos() }
                 } else {
@@ -318,10 +325,15 @@ private fun TodoViewControls(
 ) {
     var searchExpanded by rememberSaveable { mutableStateOf(search.isNotBlank()) }
     var modeBeforeSearch by rememberSaveable { mutableStateOf(mode.name) }
+    var searchHasFocused by rememberSaveable { mutableStateOf(search.isNotBlank()) }
+    var searchWasFocused by remember { mutableStateOf(false) }
     val focusRequester = remember { FocusRequester() }
     val keyboardController = LocalSoftwareKeyboardController.current
     LaunchedEffect(searchExpanded) {
-        if (searchExpanded) focusRequester.requestFocus()
+        if (searchExpanded) {
+            focusRequester.requestFocus()
+            keyboardController?.show()
+        }
     }
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -345,7 +357,11 @@ private fun TodoViewControls(
             }
             Surface(
                 onClick = {
-                    if (!searchExpanded) modeBeforeSearch = mode.name
+                    if (!searchExpanded) {
+                        modeBeforeSearch = mode.name
+                        searchHasFocused = false
+                        searchWasFocused = false
+                    }
                     searchExpanded = true
                 },
                 modifier = Modifier.size(48.dp).semantics { contentDescription = "展开搜索" }.testTag("todo_search_button"),
@@ -372,7 +388,12 @@ private fun TodoViewControls(
                 value = search,
                 onValueChange = onSearch,
                 modifier = Modifier.fillMaxWidth().height(48.dp).focusRequester(focusRequester).onFocusChanged {
-                    if (!it.isFocused && search.isBlank()) searchExpanded = false
+                    if (it.isFocused) searchHasFocused = true
+                    if (shouldCollapseTodoSearch(searchWasFocused, searchHasFocused, it.isFocused, search)) {
+                        searchExpanded = false
+                        searchHasFocused = false
+                    }
+                    searchWasFocused = it.isFocused
                 }.testTag("todo_search"),
                 placeholder = { Text("搜索标题、备注和步骤") },
                 leadingIcon = {
@@ -389,6 +410,8 @@ private fun TodoViewControls(
                             onSearch("")
                             onModeChange(TodoViewMode.valueOf(modeBeforeSearch))
                             searchExpanded = false
+                            searchHasFocused = false
+                            searchWasFocused = false
                             keyboardController?.hide()
                         }) {
                             DoodleIcon(DoodleIconType.Collapse, "关闭搜索", Modifier.size(18.dp), MaterialTheme.colorScheme.onSurfaceVariant)
@@ -404,6 +427,13 @@ private fun TodoViewControls(
     }
 }
 
+internal fun shouldCollapseTodoSearch(
+    wasFocused: Boolean,
+    hasFocused: Boolean,
+    isFocused: Boolean,
+    query: String
+): Boolean = wasFocused && hasFocused && !isFocused && query.isBlank()
+
 @Composable
 private fun TodoGroupHeader(group: TodoGroup, todos: List<TodoItem>, collapsed: Boolean, onToggle: () -> Unit) {
     Surface(
@@ -413,7 +443,12 @@ private fun TodoGroupHeader(group: TodoGroup, todos: List<TodoItem>, collapsed: 
         color = groupColor(group.colorKey)
     ) {
         Row(Modifier.padding(horizontal = 14.dp, vertical = 13.dp), verticalAlignment = Alignment.CenterVertically) {
-            DoodleIcon(DoodleIconType.Group, null, Modifier.size(22.dp), MaterialTheme.colorScheme.primary)
+            GroupDoodleIcon(
+                iconKey = group.iconKey,
+                modifier = Modifier.size(22.dp),
+                tint = MaterialTheme.colorScheme.primary,
+                isInbox = group.isInbox
+            )
             Text(group.name, Modifier.weight(1f).padding(start = 10.dp), style = MaterialTheme.typography.titleMedium)
             Text("${todos.count { it.isCompleted }}/${todos.size}", style = MaterialTheme.typography.labelMedium)
             DoodleIcon(
@@ -438,12 +473,18 @@ private fun GroupManagerDialog(
     var selected by remember(groups) { mutableStateOf<TodoGroup?>(null) }
     var name by remember(selected) { mutableStateOf(selected?.name.orEmpty()) }
     var colorKey by remember(selected) { mutableStateOf(selected?.colorKey ?: "mint") }
+    var iconKey by remember(selected, groups) {
+        mutableStateOf(selected?.let { TodoGroupIconCatalog.displayKey(it.iconKey, it.isInbox) } ?: TodoGroupIconCatalog.nextAvailable(groups))
+    }
     val colors = listOf("mint" to "薄荷", "yellow" to "柠黄", "blue" to "天空")
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("待办分组") },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Column(
+                Modifier.fillMaxWidth().heightIn(max = 560.dp).verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
                 Text("只有一层分组；日常用于接住未分类待办。", color = MaterialTheme.colorScheme.onSurfaceVariant)
                 val activeGroups = groups.filter { it.deletedAt == null }
                 activeGroups.forEachIndexed { index, group ->
@@ -454,7 +495,7 @@ private fun GroupManagerDialog(
                         color = if (selected?.id == group.id) groupColor(group.colorKey) else MaterialTheme.colorScheme.surfaceContainer
                     ) {
                         Row(Modifier.padding(horizontal = 12.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
-                            DoodleIcon(DoodleIconType.Group, null, Modifier.size(20.dp), MaterialTheme.colorScheme.primary)
+                            GroupDoodleIcon(group.iconKey, Modifier.size(20.dp), MaterialTheme.colorScheme.primary, isInbox = group.isInbox)
                             Text(group.name, Modifier.weight(1f).padding(start = 8.dp))
                             if (group.isInbox) Text("默认", style = MaterialTheme.typography.labelSmall) else {
                                 IconButton(onClick = { onMove(group, -1) }, enabled = index > 1) {
@@ -475,6 +516,30 @@ private fun GroupManagerDialog(
                     enabled = selected?.isInbox != true,
                     singleLine = true
                 )
+                Text("手绘图标", style = MaterialTheme.typography.labelLarge)
+                TodoGroupIconCatalog.keys.chunked(4).forEach { rowKeys ->
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        rowKeys.forEach { key ->
+                            Surface(
+                                onClick = { if (selected?.isInbox != true) iconKey = key },
+                                modifier = Modifier.weight(1f).height(48.dp).semantics {
+                                    contentDescription = "分组图标：${todoGroupIconLabels[key] ?: key}"
+                                },
+                                enabled = selected?.isInbox != true,
+                                shape = RoundedCornerShape(10.dp),
+                                color = if (iconKey == key) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainer,
+                                border = androidx.compose.foundation.BorderStroke(
+                                    1.dp,
+                                    if (iconKey == key) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant
+                                )
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    GroupDoodleIcon(key, Modifier.size(23.dp), MaterialTheme.colorScheme.primary)
+                                }
+                            }
+                        }
+                    }
+                }
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     colors.forEach { (key, label) ->
                         Surface(
@@ -486,7 +551,11 @@ private fun GroupManagerDialog(
                     }
                 }
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedButton(onClick = { selected = null; name = "" }, modifier = Modifier.weight(1f)) { Text("新建") }
+                    OutlinedButton(onClick = {
+                        selected = null
+                        name = ""
+                        iconKey = TodoGroupIconCatalog.nextAvailable(groups)
+                    }, modifier = Modifier.weight(1f)) { Text("新建") }
                     if (selected != null && selected?.isInbox != true) {
                         OutlinedButton(
                             onClick = { selected?.let(onDelete); selected = null; name = "" },
@@ -501,7 +570,7 @@ private fun GroupManagerDialog(
                 onClick = {
                     val clean = name.trim()
                     if (clean.isNotEmpty()) {
-                        selected?.let { onUpdate(it, clean, it.iconKey, colorKey) } ?: onAdd(clean, "folder", colorKey)
+                        selected?.let { onUpdate(it, clean, iconKey, colorKey) } ?: onAdd(clean, iconKey, colorKey)
                         selected = null
                         name = ""
                     }
@@ -545,9 +614,30 @@ private fun ProgressPanel(state: DayUiState) {
 }
 
 @Composable
-private fun QuickAdd(onAdd: (String) -> Unit) {
+private fun QuickAdd(
+    groups: List<TodoGroup>,
+    onManageGroups: () -> Unit,
+    onAdd: (String, String) -> Unit
+) {
     var title by remember { mutableStateOf("") }
+    var groupMenuOpen by remember { mutableStateOf(false) }
+    var selectedGroupId by rememberSaveable { mutableStateOf(TodoDefaults.INBOX_GROUP_ID) }
     val focusManager = LocalFocusManager.current
+    val activeGroups = groups.filter { it.deletedAt == null }
+    val fallbackGroup = activeGroups.firstOrNull { it.id == TodoDefaults.INBOX_GROUP_ID } ?: activeGroups.firstOrNull()
+    val selectedGroup = activeGroups.firstOrNull { it.id == selectedGroupId } ?: fallbackGroup
+    LaunchedEffect(selectedGroupId, activeGroups.map(TodoGroup::id)) {
+        if (activeGroups.none { it.id == selectedGroupId }) {
+            selectedGroupId = fallbackGroup?.id ?: TodoDefaults.INBOX_GROUP_ID
+        }
+    }
+    fun submit() {
+        val clean = title.trim()
+        if (clean.isEmpty()) return
+        onAdd(clean, selectedGroup?.id ?: TodoDefaults.INBOX_GROUP_ID)
+        title = ""
+        focusManager.clearFocus()
+    }
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Text("待办", style = MaterialTheme.typography.headlineSmall)
         OutlinedTextField(
@@ -558,22 +648,61 @@ private fun QuickAdd(onAdd: (String) -> Unit) {
             singleLine = true,
             shape = RoundedCornerShape(12.dp),
             trailingIcon = {
-                FilledIconButton(
-                    onClick = {
-                        onAdd(title)
-                        title = ""
-                        focusManager.clearFocus()
-                    },
-                    enabled = title.isNotBlank()
-                ) { TodoAddIcon(Modifier.semantics { contentDescription = "添加待办" }) }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box {
+                        Surface(
+                            onClick = { groupMenuOpen = true },
+                            modifier = Modifier.size(48.dp).semantics {
+                                contentDescription = "选择分组，当前：${selectedGroup?.name ?: "日常"}"
+                            }.testTag("quick_add_group"),
+                            shape = RoundedCornerShape(13.dp),
+                            color = selectedGroup?.let { groupColor(it.colorKey) } ?: MaterialTheme.colorScheme.primaryContainer
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                GroupDoodleIcon(
+                                    selectedGroup?.iconKey ?: TodoGroupIconCatalog.DAILY,
+                                    Modifier.size(23.dp),
+                                    MaterialTheme.colorScheme.primary,
+                                    isInbox = selectedGroup?.isInbox == true
+                                )
+                            }
+                        }
+                        DropdownMenu(expanded = groupMenuOpen, onDismissRequest = { groupMenuOpen = false }) {
+                            activeGroups.forEach { group ->
+                                DropdownMenuItem(
+                                    modifier = Modifier.testTag("quick_add_group_${group.id}"),
+                                    text = { Text(group.name, maxLines = 1) },
+                                    leadingIcon = {
+                                        GroupDoodleIcon(group.iconKey, Modifier.size(22.dp), MaterialTheme.colorScheme.primary, isInbox = group.isInbox)
+                                    },
+                                    trailingIcon = if (group.id == selectedGroup?.id) {
+                                        { DoodleIcon(DoodleIconType.Check, "当前分组", Modifier.size(19.dp), MaterialTheme.colorScheme.primary) }
+                                    } else null,
+                                    onClick = {
+                                        selectedGroupId = group.id
+                                        groupMenuOpen = false
+                                    }
+                                )
+                            }
+                            DropdownMenuItem(
+                                modifier = Modifier.testTag("quick_add_manage_groups"),
+                                text = { Text("管理分组") },
+                                leadingIcon = { DoodleIcon(DoodleIconType.Edit, null, Modifier.size(21.dp), MaterialTheme.colorScheme.primary) },
+                                onClick = {
+                                    groupMenuOpen = false
+                                    onManageGroups()
+                                }
+                            )
+                        }
+                    }
+                    FilledIconButton(onClick = ::submit, enabled = title.isNotBlank(), modifier = Modifier.size(48.dp)) {
+                        TodoAddIcon(Modifier.semantics { contentDescription = "添加待办" })
+                    }
+                }
             },
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
             keyboardActions = KeyboardActions(onDone = {
-                if (title.isNotBlank()) {
-                    onAdd(title)
-                    title = ""
-                    focusManager.clearFocus()
-                }
+                submit()
             })
         )
     }

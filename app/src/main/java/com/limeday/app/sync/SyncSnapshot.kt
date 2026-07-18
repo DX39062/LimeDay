@@ -7,6 +7,7 @@ import com.limeday.app.data.SyncEntity
 import com.limeday.app.data.TodoItem
 import com.limeday.app.data.TodoDefaults
 import com.limeday.app.data.TodoGroup
+import com.limeday.app.data.TodoGroupIconCatalog
 import com.limeday.app.data.TodoPriority
 import com.limeday.app.data.TodoRecurrence
 import com.limeday.app.data.TodoStep
@@ -172,7 +173,7 @@ data class SyncSnapshot(
         private fun inboxGroup(deviceId: String, timestamp: Long) = TodoGroup(
             id = TodoDefaults.INBOX_GROUP_ID,
             name = "日常",
-            iconKey = "inbox",
+            iconKey = TodoGroupIconCatalog.DAILY,
             colorKey = "mint",
             sortOrder = "00000000000000000000-inbox",
             isInbox = true,

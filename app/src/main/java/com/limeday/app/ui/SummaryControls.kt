@@ -93,6 +93,11 @@ fun ProviderOverrideFields(
                 readOnly = true,
                 modifier = Modifier.fillMaxWidth().menuAnchor(MenuAnchorType.PrimaryNotEditable),
                 label = { Text("本次使用的模型服务") },
+                leadingIcon = {
+                    selected?.let {
+                        LlmProviderIcon(it.presetId, MaterialTheme.colorScheme.primary, Modifier.size(23.dp))
+                    }
+                },
                 trailingIcon = {
                     DoodleIcon(
                         if (expanded) DoodleIconType.Collapse else DoodleIconType.Expand,
@@ -106,6 +111,9 @@ fun ProviderOverrideFields(
                 providers.forEach { provider ->
                     DropdownMenuItem(
                         text = { Text("${provider.name} · ${provider.protocol.displayName}") },
+                        leadingIcon = {
+                            LlmProviderIcon(provider.presetId, MaterialTheme.colorScheme.primary, Modifier.size(22.dp))
+                        },
                         onClick = {
                             onProviderSelected(provider)
                             expanded = false

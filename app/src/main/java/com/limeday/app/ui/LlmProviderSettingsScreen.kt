@@ -183,7 +183,7 @@ fun LlmProviderSettingsScreen(
                             },
                             modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
                         ) {
-                            LlmProtocolIcon(preset.protocol, MaterialTheme.colorScheme.primary, Modifier.size(22.dp))
+                            LlmProviderIcon(preset.id, MaterialTheme.colorScheme.primary, Modifier.size(24.dp))
                             Text(preset.displayName, Modifier.weight(1f).padding(start = 10.dp))
                             DoodleIcon(DoodleIconType.Forward, null, Modifier.size(18.dp), MaterialTheme.colorScheme.onSurfaceVariant)
                         }
@@ -253,7 +253,7 @@ internal fun LlmProviderCard(
         Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 Surface(shape = RoundedCornerShape(8.dp), color = MaterialTheme.colorScheme.surface) {
-                    LlmProtocolIcon(provider.protocol, MaterialTheme.colorScheme.primary, Modifier.padding(10.dp).size(26.dp))
+                    LlmProviderIcon(provider.presetId, MaterialTheme.colorScheme.primary, Modifier.padding(9.dp).size(28.dp))
                 }
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -349,6 +349,9 @@ internal fun LlmProviderEditorDialog(
                         onValueChange = {}, readOnly = true,
                         modifier = Modifier.fillMaxWidth().menuAnchor(MenuAnchorType.PrimaryNotEditable),
                         label = { Text("预设") },
+                        leadingIcon = {
+                            LlmProviderIcon(draft.presetId, MaterialTheme.colorScheme.primary, Modifier.size(23.dp))
+                        },
                         trailingIcon = {
                             DoodleIcon(
                                 if (presetExpanded) DoodleIconType.Collapse else DoodleIconType.Expand,
@@ -360,7 +363,12 @@ internal fun LlmProviderEditorDialog(
                     )
                     ExposedDropdownMenu(expanded = presetExpanded, onDismissRequest = { presetExpanded = false }) {
                         LlmProviderPresets.all.forEach { preset ->
-                            DropdownMenuItem(text = { Text(preset.displayName) }, onClick = {
+                            DropdownMenuItem(
+                                text = { Text(preset.displayName) },
+                                leadingIcon = {
+                                    LlmProviderIcon(preset.id, MaterialTheme.colorScheme.primary, Modifier.size(22.dp))
+                                },
+                                onClick = {
                                 val next = preset.createProvider().copy(id = draft.id, apiKey = draft.apiKey, createdAt = draft.createdAt)
                                 draft = next
                                 presetExpanded = false

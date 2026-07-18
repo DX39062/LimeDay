@@ -290,7 +290,9 @@ private fun SummaryPanel(
                 Text("智能总结", modifier = Modifier.weight(1f).padding(start = 10.dp), style = MaterialTheme.typography.titleLarge)
             }
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                DoodleIcon(DoodleIconType.Lock, null, Modifier.size(16.dp), MaterialTheme.colorScheme.onSecondaryContainer)
+                state.activeLlmProvider?.let {
+                    LlmProviderIcon(it.presetId, MaterialTheme.colorScheme.onSecondaryContainer, Modifier.size(20.dp))
+                } ?: DoodleIcon(DoodleIconType.Lock, null, Modifier.size(16.dp), MaterialTheme.colorScheme.onSecondaryContainer)
                 Text(
                     state.activeLlmProvider?.let { "默认使用 ${it.name} · ${it.model}" } ?: "尚未配置模型服务",
                     style = MaterialTheme.typography.bodyMedium,

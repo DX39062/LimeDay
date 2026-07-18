@@ -192,6 +192,7 @@ fun SummaryScreen(
                 items(state.rangeSummaries, key = RangeSummary::id) { summary ->
                     RangeSummaryCard(
                         summary = summary,
+                        providerPresetId = state.llmSettings.providers.firstOrNull { it.id == summary.providerId }?.presetId,
                         expanded = summary.id in expandedSummaryIds,
                         onToggle = {
                             expandedSummaryIds = if (summary.id in expandedSummaryIds) {
@@ -240,10 +241,21 @@ fun SummaryScreen(
 }
 
 @Composable
-internal fun RangeSummaryCard(summary: RangeSummary, expanded: Boolean, onToggle: () -> Unit, onDelete: () -> Unit) {
+internal fun RangeSummaryCard(
+    summary: RangeSummary,
+    providerPresetId: String? = null,
+    expanded: Boolean,
+    onToggle: () -> Unit,
+    onDelete: () -> Unit
+) {
     Surface(onClick = onToggle, shape = RoundedCornerShape(8.dp), color = MaterialTheme.colorScheme.surfaceContainer) {
         Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                LlmProviderIcon(
+                    providerPresetId ?: "custom",
+                    MaterialTheme.colorScheme.primary,
+                    Modifier.padding(end = 10.dp).size(30.dp)
+                )
                 Column(Modifier.weight(1f)) {
                     Text("${summary.rangeStart} 至 ${summary.rangeEnd}", style = MaterialTheme.typography.titleMedium)
                     Text("${summary.providerName} · ${summary.model}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)

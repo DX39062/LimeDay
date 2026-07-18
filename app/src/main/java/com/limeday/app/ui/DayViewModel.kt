@@ -138,7 +138,10 @@ class DayViewModel(
     private var reviewDirty = false
 
     init {
-        viewModelScope.launch { repository.ensureDefaultGroupName() }
+        viewModelScope.launch {
+            repository.ensureDefaultGroupName()
+            repository.normalizeLegacyGroupIcons()
+        }
         if (shouldEnableLlmForUpgrade(appSettingsStore.hasExplicitLlmSetting, llmSettings.value.providers.size)) {
             appSettingsStore.setLlmEnabled(true)
         }
@@ -277,10 +280,10 @@ class DayViewModel(
         }
     }
 
-    fun addTodo(title: String) {
+    fun addTodo(title: String, groupId: String) {
         val clean = title.trim().take(80)
         if (clean.isEmpty()) return
-        viewModelScope.launch { repository.addTodo(selectedDate.value.toString(), clean) }
+        viewModelScope.launch { repository.addTodo(selectedDate.value.toString(), clean, groupId = groupId) }
     }
 
     fun updateTodo(todo: TodoItem, title: String, note: String) {
