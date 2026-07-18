@@ -69,8 +69,11 @@
 ## 分支与发布
 
 - `main`：Kotlin/Compose 2.7.2 实现。
-- 目标注释标签与公开 GitHub Release：`v2.7.2`。
-- 发布完成后从 GitHub 重新下载 APK，与仓库交付物逐字节比较并在本节记录结果。
+- 发布代码提交：`e6f4b687838107035c26327add8de70881a2456a`。
+- 注释标签：`v2.7.2`，解引用到上述代码提交。
+- 公开 GitHub Release：https://github.com/DX39062/LimeDay/releases/tag/v2.7.2
+- 远端资产状态：`uploaded`，大小 8,801,539 bytes，非草稿、非预发布。
+- 已从 GitHub Release 重新下载 APK；远端与仓库交付物 SHA-256 均为 `889513FA82C804865DDD9F84396EA054C15B5658D6E0D72340F1FA0138D664AE`，`cmp` 逐字节一致，回下载 ZIP 完整性检查通过。
 
 ## 构建缓存清理
 
