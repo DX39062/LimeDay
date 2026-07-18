@@ -6,7 +6,7 @@
 
 ## 版本与兼容边界
 
-- [ ] `versionName = 2.7.0`，`versionCode = 2700`，标签 `v2.7.0`。
+- [x] `versionName = 2.7.0`，`versionCode = 2700`，标签 `v2.7.0`。
 - [x] Room schema 从 6 升到 7，保留 1/2/3/4/5/6 非破坏迁移。
 - [x] WebDAV/JSON 写出格式升级为 v2；可读取 v1，未知版本拒绝。
 - [x] 只发布 `arm64-v8a` APK，继续明确 debug key 交付属性。
@@ -86,7 +86,7 @@
 
 - [x] APK 复制到 `releases/LimeDay-2.7.0-arm64-v8a.apk`，README/BUILD_REPORT 写入准确大小与 SHA-256。
 - [x] 停止 Gradle/ADB；删除本轮项目 `.gradle`、`app/build`、Kotlin 会话和明确临时安装的 SDK，不删除用户级可复用工具链。
-- [ ] 工作树无遗漏，提交推送到 GitHub `main`。
-- [ ] 创建并推送注释标签 `v2.7.0`。
-- [ ] 创建非草稿、非预发布的公开 GitHub Release 并上传 APK。
-- [ ] 从 GitHub 回下载 APK，大小与 SHA-256 和本地完全一致。
+- [x] 工作树无遗漏，提交推送到 GitHub `main`。
+- [x] 创建并推送注释标签 `v2.7.0`。
+- [x] 创建非草稿、非预发布的公开 GitHub Release 并上传 APK。
+- [x] 从 GitHub 回下载 APK，大小与 SHA-256 和本地完全一致。

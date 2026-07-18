@@ -80,6 +80,7 @@ class DatabaseMigrationTest {
         assertEquals(7, database.limeDayDao().metadata()?.schemaVersionValue)
         assertEquals(TodoDefaults.INBOX_GROUP_ID, database.limeDayDao().allTodos().single().groupId)
         assertTrue(database.limeDayDao().allGroups().single().isInbox)
+        assertEquals("日常", database.limeDayDao().allGroups().single().name)
         database.close()
     }
 
@@ -92,9 +93,48 @@ class DatabaseMigrationTest {
         assertEquals(TodoDefaults.INBOX_GROUP_ID, todo.groupId)
         assertEquals(TodoRecurrence.NONE, todo.recurrence)
         assertTrue(database.limeDayDao().allGroups().single().isInbox)
+        assertEquals("日常", database.limeDayDao().allGroups().single().name)
         assertTrue(database.limeDayDao().allSteps().isEmpty())
         assertTrue(database.limeDayDao().allTodoTombstones().isEmpty())
         assertEquals(7, database.limeDayDao().metadata()?.schemaVersionValue)
+        database.close()
+    }
+
+    @Test
+    fun defaultGroupRenameIsIdempotentAndKeepsTodoAssignment() = runBlocking {
+        val database = Room.inMemoryDatabaseBuilder(context, AppDatabase::class.java).build()
+        val dao = database.limeDayDao()
+        dao.upsertGroup(
+            TodoGroup(
+                id = TodoDefaults.INBOX_GROUP_ID,
+                name = "收件箱",
+                iconKey = "inbox",
+                isInbox = true,
+                sortOrder = "0",
+                deviceId = "old-device",
+                revision = 4
+            )
+        )
+        dao.upsertTodo(
+            TodoItem(
+                id = "existing-todo",
+                date = "2026-07-18",
+                title = "保留分组引用",
+                groupId = TodoDefaults.INBOX_GROUP_ID,
+                sortOrder = "0",
+                deviceId = "old-device"
+            )
+        )
+        val repository = LimeDayRepository(database)
+
+        assertTrue(repository.ensureDefaultGroupName())
+        val renamed = dao.groupById(TodoDefaults.INBOX_GROUP_ID)!!
+        assertEquals("日常", renamed.name)
+        assertEquals(5, renamed.revision)
+        assertFalse(repository.ensureDefaultGroupName())
+        assertEquals(5, dao.groupById(TodoDefaults.INBOX_GROUP_ID)!!.revision)
+        assertEquals(1, dao.allGroups().size)
+        assertEquals(TodoDefaults.INBOX_GROUP_ID, dao.todoById("existing-todo")!!.groupId)
         database.close()
     }
 

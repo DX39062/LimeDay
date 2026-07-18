@@ -138,6 +138,7 @@ class DayViewModel(
     private var reviewDirty = false
 
     init {
+        viewModelScope.launch { repository.ensureDefaultGroupName() }
         if (shouldEnableLlmForUpgrade(appSettingsStore.hasExplicitLlmSetting, llmSettings.value.providers.size)) {
             appSettingsStore.setLlmEnabled(true)
         }

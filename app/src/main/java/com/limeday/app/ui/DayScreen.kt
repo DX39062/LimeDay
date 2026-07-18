@@ -38,15 +38,21 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.platform.testTag
@@ -155,7 +161,9 @@ fun DayScreen(
                         onManageGroups = { showGroupManager = true }
                     )
                 }
-                item { ProgressPanel(state) }
+                if (state.todoViewMode == TodoViewMode.DAY && state.todoSearchQuery.isBlank()) {
+                    item { ProgressPanel(state) }
+                }
                 if (state.todoViewMode == TodoViewMode.DAY && state.todoSearchQuery.isBlank()) item { QuickAdd(onAddTodo) }
                 if (state.displayedTodos.isEmpty()) {
                     item { EmptyTodos() }
@@ -308,56 +316,90 @@ private fun TodoViewControls(
     onSearch: (String) -> Unit,
     onManageGroups: () -> Unit
 ) {
+    var searchExpanded by rememberSaveable { mutableStateOf(search.isNotBlank()) }
+    var modeBeforeSearch by rememberSaveable { mutableStateOf(mode.name) }
+    val focusRequester = remember { FocusRequester() }
+    val keyboardController = LocalSoftwareKeyboardController.current
+    LaunchedEffect(searchExpanded) {
+        if (searchExpanded) focusRequester.requestFocus()
+    }
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            TodoViewMode.entries.forEach { item ->
-                Surface(
-                    onClick = { onModeChange(item) },
-                    modifier = Modifier.weight(1f),
-                    shape = RoundedCornerShape(12.dp),
-                    color = if (item == mode) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainer,
-                    border = androidx.compose.foundation.BorderStroke(
-                        1.dp,
-                        if (item == mode) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant
-                    )
-                ) {
-                    Text(
-                        item.label,
-                        Modifier.padding(vertical = 14.dp),
-                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
-                    )
-                }
-            }
-        }
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedTextField(
-                value = search,
-                onValueChange = onSearch,
-                modifier = Modifier.weight(1f).testTag("todo_search"),
-                placeholder = { Text("搜索标题、备注和步骤") },
-                leadingIcon = {
-                    DoodleIcon(DoodleIconType.Search, null, Modifier.size(20.dp), MaterialTheme.colorScheme.primary)
-                },
-                trailingIcon = if (search.isNotBlank()) {
-                    {
-                        IconButton(onClick = { onSearch("") }) {
-                            DoodleIcon(DoodleIconType.Close, "清除搜索", Modifier.size(18.dp), MaterialTheme.colorScheme.onSurfaceVariant)
+            Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                TodoViewMode.entries.forEach { item ->
+                    Surface(
+                        onClick = { onModeChange(item) },
+                        modifier = Modifier.weight(1f).height(48.dp),
+                        shape = RoundedCornerShape(12.dp),
+                        color = if (item == mode) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainer,
+                        border = androidx.compose.foundation.BorderStroke(
+                            1.dp,
+                            if (item == mode) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant
+                        )
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Text(item.label, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
                         }
                     }
-                } else null,
-                singleLine = true,
-                shape = RoundedCornerShape(12.dp)
-            )
+                }
+            }
+            Surface(
+                onClick = {
+                    if (!searchExpanded) modeBeforeSearch = mode.name
+                    searchExpanded = true
+                },
+                modifier = Modifier.size(48.dp).semantics { contentDescription = "展开搜索" }.testTag("todo_search_button"),
+                shape = RoundedCornerShape(13.dp),
+                color = if (searchExpanded) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainer
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    DoodleIcon(DoodleIconType.Search, null, Modifier.size(22.dp), MaterialTheme.colorScheme.primary)
+                }
+            }
             Surface(
                 onClick = onManageGroups,
-                modifier = Modifier.size(56.dp).semantics { contentDescription = "管理分组" },
-                shape = RoundedCornerShape(14.dp),
+                modifier = Modifier.size(48.dp).semantics { contentDescription = "管理分组" },
+                shape = RoundedCornerShape(13.dp),
                 color = MaterialTheme.colorScheme.tertiaryContainer
             ) {
                 Box(contentAlignment = Alignment.Center) {
-                    DoodleIcon(DoodleIconType.Group, null, Modifier.size(25.dp), MaterialTheme.colorScheme.onTertiaryContainer)
+                    DoodleIcon(DoodleIconType.Group, null, Modifier.size(23.dp), MaterialTheme.colorScheme.onTertiaryContainer)
                 }
             }
+        }
+        if (searchExpanded) {
+            OutlinedTextField(
+                value = search,
+                onValueChange = onSearch,
+                modifier = Modifier.fillMaxWidth().height(48.dp).focusRequester(focusRequester).onFocusChanged {
+                    if (!it.isFocused && search.isBlank()) searchExpanded = false
+                }.testTag("todo_search"),
+                placeholder = { Text("搜索标题、备注和步骤") },
+                leadingIcon = {
+                    DoodleIcon(DoodleIconType.Search, null, Modifier.size(18.dp), MaterialTheme.colorScheme.primary)
+                },
+                trailingIcon = {
+                    Row {
+                        if (search.isNotBlank()) {
+                            IconButton(onClick = { onSearch("") }) {
+                                DoodleIcon(DoodleIconType.Close, "清除搜索", Modifier.size(16.dp), MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                        }
+                        IconButton(onClick = {
+                            onSearch("")
+                            onModeChange(TodoViewMode.valueOf(modeBeforeSearch))
+                            searchExpanded = false
+                            keyboardController?.hide()
+                        }) {
+                            DoodleIcon(DoodleIconType.Collapse, "关闭搜索", Modifier.size(18.dp), MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+                },
+                singleLine = true,
+                shape = RoundedCornerShape(12.dp),
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                keyboardActions = KeyboardActions(onDone = { keyboardController?.hide() })
+            )
         }
     }
 }
@@ -402,7 +444,7 @@ private fun GroupManagerDialog(
         title = { Text("待办分组") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text("只有一层分组；收件箱用于接住未分类待办。", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("只有一层分组；日常用于接住未分类待办。", color = MaterialTheme.colorScheme.onSurfaceVariant)
                 val activeGroups = groups.filter { it.deletedAt == null }
                 activeGroups.forEachIndexed { index, group ->
                     Surface(
@@ -484,20 +526,18 @@ private fun ProgressPanel(state: DayUiState) {
     val animatedCompleted by animateIntAsState(state.completedCount, tween(220), label = "completed count")
     val animatedPercent by animateIntAsState(state.progressPercent, tween(220), label = "progress percent")
     Surface(
+        modifier = Modifier.fillMaxWidth().heightIn(min = 64.dp, max = 72.dp).testTag("daily_progress_compact"),
         shape = RoundedCornerShape(16.dp),
         color = MaterialTheme.colorScheme.primaryContainer
     ) {
-        Column(Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.Bottom) {
-                Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                    Text("完成进度", style = MaterialTheme.typography.labelLarge)
-                    Text("$animatedCompleted / ${state.todos.size} 项", style = MaterialTheme.typography.titleLarge)
-                }
-                Text("$animatedPercent%", style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.primary)
+        Column(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                Text("完成 $animatedCompleted / ${state.todos.size}", style = MaterialTheme.typography.titleMedium)
+                Text("$animatedPercent%", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
             }
             LinearProgressIndicator(
                 progress = { animatedProgress },
-                modifier = Modifier.fillMaxWidth().height(7.dp).clip(CircleShape),
+                modifier = Modifier.fillMaxWidth().height(5.dp).clip(CircleShape),
                 trackColor = MaterialTheme.colorScheme.surface.copy(alpha = .65f)
             )
         }

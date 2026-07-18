@@ -171,7 +171,7 @@ data class SyncSnapshot(
 
         private fun inboxGroup(deviceId: String, timestamp: Long) = TodoGroup(
             id = TodoDefaults.INBOX_GROUP_ID,
-            name = "收件箱",
+            name = "日常",
             iconKey = "inbox",
             colorKey = "mint",
             sortOrder = "00000000000000000000-inbox",

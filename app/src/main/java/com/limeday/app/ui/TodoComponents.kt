@@ -345,8 +345,8 @@ private fun TodoOptionsSheet(
                     }
                 }
             }
-            TodoOptionRow("截止、提醒、分组和步骤", icon = { TodoCalendarIcon() }, onClick = onEditDetails)
-            TodoOptionRow("移动到其他日期", icon = { TodoCalendarIcon() }, onClick = onMove)
+            TodoOptionRow("截止、提醒、分组和步骤", icon = { TodoDetailsIcon() }, onClick = onEditDetails)
+            TodoOptionRow("移动到其他日期", icon = { TodoMoveDateIcon() }, onClick = onMove)
             TodoOptionRow("复制待办", icon = { TodoCopyIcon() }, onClick = onDuplicate)
             TodoOptionRow(
                 "移到回收站",
@@ -452,7 +452,7 @@ fun TodoEditor(
                 )
                 Box {
                     OutlinedButton(onClick = { groupMenu = true }, modifier = Modifier.fillMaxWidth()) {
-                        Text("分组：${groups.firstOrNull { it.id == groupId }?.name ?: "收件箱"}")
+                        Text("分组：${groups.firstOrNull { it.id == groupId }?.name ?: "日常"}")
                     }
                     DropdownMenu(expanded = groupMenu, onDismissRequest = { groupMenu = false }) {
                         groups.forEach { group ->

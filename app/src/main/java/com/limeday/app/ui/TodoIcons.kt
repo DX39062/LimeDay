@@ -115,6 +115,49 @@ fun TodoCalendarIcon(modifier: Modifier = Modifier, size: Dp = 24.dp) {
 }
 
 @Composable
+fun TodoDetailsIcon(modifier: Modifier = Modifier, size: Dp = 24.dp) {
+    val color = LocalContentColor.current
+    Canvas(modifier.size(size)) {
+        val stroke = this.size.minDimension * .072f
+        val style = Stroke(stroke, cap = StrokeCap.Round, join = StrokeJoin.Round)
+        val width = this.size.width
+        val height = this.size.height
+        listOf(.30f, .50f, .70f).forEachIndexed { index, y ->
+            val check = Path().apply {
+                moveTo(width * .17f, height * (y - .01f))
+                lineTo(width * .23f, height * (y + .05f))
+                lineTo(width * .33f, height * (y - .06f))
+            }
+            drawPath(check, color, style = style)
+            val end = if (index == 1) .72f else .82f
+            drawLine(color, Offset(this.size.width * .43f, this.size.height * y), Offset(this.size.width * end, this.size.height * y), stroke, StrokeCap.Round)
+        }
+    }
+}
+
+@Composable
+fun TodoMoveDateIcon(modifier: Modifier = Modifier, size: Dp = 24.dp) {
+    val color = LocalContentColor.current
+    Canvas(modifier.size(size)) {
+        val stroke = this.size.minDimension * .07f
+        val style = Stroke(stroke, cap = StrokeCap.Round, join = StrokeJoin.Round)
+        val width = this.size.width
+        val height = this.size.height
+        drawRoundRect(color, Offset(this.size.width * .12f, this.size.height * .23f), androidx.compose.ui.geometry.Size(this.size.width * .53f, this.size.height * .55f), CornerRadius(this.size.width * .07f), style)
+        drawLine(color, Offset(this.size.width * .13f, this.size.height * .39f), Offset(this.size.width * .64f, this.size.height * .39f), stroke, StrokeCap.Round)
+        drawLine(color, Offset(this.size.width * .25f, this.size.height * .17f), Offset(this.size.width * .25f, this.size.height * .29f), stroke, StrokeCap.Round)
+        drawLine(color, Offset(this.size.width * .51f, this.size.height * .17f), Offset(this.size.width * .51f, this.size.height * .29f), stroke, StrokeCap.Round)
+        drawLine(color, Offset(this.size.width * .57f, this.size.height * .59f), Offset(this.size.width * .86f, this.size.height * .59f), stroke, StrokeCap.Round)
+        val arrow = Path().apply {
+            moveTo(width * .76f, height * .49f)
+            lineTo(width * .87f, height * .59f)
+            lineTo(width * .76f, height * .69f)
+        }
+        drawPath(arrow, color, style = style)
+    }
+}
+
+@Composable
 fun TodoPriorityIcon(modifier: Modifier = Modifier, size: Dp = 24.dp, filled: Boolean = false) {
     val color = LocalContentColor.current
     Canvas(modifier.size(size)) {

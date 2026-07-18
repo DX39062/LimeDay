@@ -25,7 +25,7 @@ class DayAndTrashUiTest {
     fun smartViewSearchAndGroupCollapseAreReachable() {
         val group = TodoGroup(
             id = TodoDefaults.INBOX_GROUP_ID,
-            name = "收件箱",
+            name = "日常",
             sortOrder = "0",
             isInbox = true,
             deviceId = "device"
@@ -58,6 +58,10 @@ class DayAndTrashUiTest {
 
         composeRule.onNodeWithText("逾期").performClick()
         composeRule.runOnIdle { assertEquals(TodoViewMode.OVERDUE, selectedMode) }
+        composeRule.onNodeWithTag("daily_progress_compact").assertDoesNotExist()
+        composeRule.onNodeWithTag("todo_search").assertDoesNotExist()
+        composeRule.onNodeWithTag("todo_search_button").performClick()
+        composeRule.onNodeWithTag("todo_search").assertExists()
         composeRule.onNodeWithTag("todo_search").performTextInput("检索")
         composeRule.runOnIdle { assertEquals("检索", query) }
         composeRule.onNodeWithTag("group_header_${TodoDefaults.INBOX_GROUP_ID}").performClick()

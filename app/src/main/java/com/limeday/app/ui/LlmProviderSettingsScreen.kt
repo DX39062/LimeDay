@@ -70,6 +70,7 @@ fun LlmProviderSettingsScreen(
 ) {
     var editing by remember { mutableStateOf<LlmServiceConfig?>(null) }
     var deleting by remember { mutableStateOf<LlmServiceConfig?>(null) }
+    var selectingPreset by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
@@ -81,14 +82,12 @@ fun LlmProviderSettingsScreen(
                     }
                 },
                 actions = {
-                    IconButton(
-                        modifier = Modifier.semantics { contentDescription = "添加模型服务" },
-                        onClick = {
-                        val provider = LlmProviderPresets.all.first().createProvider()
-                        onLoadCachedModels(provider.id)
-                        editing = provider
-                    }) {
-                        LlmActionIcon(LlmActionIconType.Add, MaterialTheme.colorScheme.onSurface, Modifier.padding(13.dp))
+                    TextButton(
+                        modifier = Modifier.heightIn(min = 48.dp).semantics { contentDescription = "添加模型服务" },
+                        onClick = { selectingPreset = true }
+                    ) {
+                        LlmActionIcon(LlmActionIconType.Add, MaterialTheme.colorScheme.onSurface, Modifier.size(22.dp))
+                        Text("新增", Modifier.padding(start = 6.dp), color = MaterialTheme.colorScheme.onSurface)
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background)
@@ -127,11 +126,7 @@ fun LlmProviderSettingsScreen(
                             verticalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
                             Text("还没有模型服务", style = MaterialTheme.typography.titleMedium)
-                            Button(onClick = {
-                                val provider = LlmProviderPresets.all.first().createProvider()
-                                onLoadCachedModels(provider.id)
-                                editing = provider
-                            }) { Text("添加服务") }
+                            Button(onClick = { selectingPreset = true }) { Text("选择预设并添加") }
                         }
                     }
                 }
@@ -156,7 +151,48 @@ fun LlmProviderSettingsScreen(
                     )
                 }
             }
+            item {
+                OutlinedButton(
+                    onClick = { selectingPreset = true },
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp).testTag("add_llm_provider_bottom")
+                ) {
+                    LlmActionIcon(LlmActionIconType.Add, MaterialTheme.colorScheme.primary, Modifier.size(22.dp))
+                    Text("新增模型服务", Modifier.padding(start = 8.dp))
+                }
+            }
         }
+    }
+
+    if (selectingPreset) {
+        AlertDialog(
+            onDismissRequest = { selectingPreset = false },
+            title = { Text("选择服务预设") },
+            text = {
+                Column(
+                    Modifier.fillMaxWidth().heightIn(max = 500.dp).verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text("先选择接口模板，下一步仍可修改名称、端点和模型。", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    LlmProviderPresets.all.forEach { preset ->
+                        OutlinedButton(
+                            onClick = {
+                                val provider = preset.createProvider()
+                                onLoadCachedModels(provider.id)
+                                selectingPreset = false
+                                editing = provider
+                            },
+                            modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
+                        ) {
+                            LlmProtocolIcon(preset.protocol, MaterialTheme.colorScheme.primary, Modifier.size(22.dp))
+                            Text(preset.displayName, Modifier.weight(1f).padding(start = 10.dp))
+                            DoodleIcon(DoodleIconType.Forward, null, Modifier.size(18.dp), MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+                }
+            },
+            confirmButton = {},
+            dismissButton = { TextButton(onClick = { selectingPreset = false }) { Text("取消") } }
+        )
     }
 
     editing?.let { provider ->

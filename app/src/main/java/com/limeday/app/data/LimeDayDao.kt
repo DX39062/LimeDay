@@ -45,6 +45,9 @@ interface LimeDayDao {
     @Query("SELECT * FROM todo_groups")
     suspend fun allGroups(): List<TodoGroup>
 
+    @Query("SELECT * FROM todo_groups WHERE id = :id LIMIT 1")
+    suspend fun groupById(id: String): TodoGroup?
+
     @Query("SELECT * FROM todo_steps")
     suspend fun allSteps(): List<TodoStep>
 

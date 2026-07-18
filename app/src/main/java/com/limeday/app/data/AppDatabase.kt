@@ -138,7 +138,7 @@ abstract class AppDatabase : RoomDatabase() {
                 db.execSQL(
                     """INSERT OR IGNORE INTO todo_groups
                         (id, name, icon_key, color_key, sort_order, is_inbox, created_at, updated_at, deleted_at, device_id, revision)
-                        SELECT '${TodoDefaults.INBOX_GROUP_ID}', '收件箱', 'inbox', 'mint', '00000000000000000000-inbox', 1,
+                        SELECT '${TodoDefaults.INBOX_GROUP_ID}', '日常', 'inbox', 'mint', '00000000000000000000-inbox', 1,
                                CAST(strftime('%s','now') AS INTEGER) * 1000,
                                CAST(strftime('%s','now') AS INTEGER) * 1000,
                                NULL, device_id, 1
@@ -231,7 +231,7 @@ abstract class AppDatabase : RoomDatabase() {
             db.execSQL(
                 """INSERT OR IGNORE INTO todo_groups
                     (id, name, icon_key, color_key, sort_order, is_inbox, created_at, updated_at, deleted_at, device_id, revision)
-                    SELECT '${TodoDefaults.INBOX_GROUP_ID}', '收件箱', 'inbox', 'mint', '00000000000000000000-inbox', 1,
+                    SELECT '${TodoDefaults.INBOX_GROUP_ID}', '日常', 'inbox', 'mint', '00000000000000000000-inbox', 1,
                            CAST(strftime('%s','now') AS INTEGER) * 1000,
                            CAST(strftime('%s','now') AS INTEGER) * 1000,
                            NULL, device_id, 1

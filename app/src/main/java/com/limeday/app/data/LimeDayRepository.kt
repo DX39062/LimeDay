@@ -27,6 +27,20 @@ class LimeDayRepository(private val database: AppDatabase) {
         dao.overdueTodos(today.toString(), now)
     fun plannedTodos(): Flow<List<TodoItem>> = dao.plannedTodos()
 
+    suspend fun ensureDefaultGroupName(): Boolean = database.withTransaction {
+        val group = dao.groupById(TodoDefaults.INBOX_GROUP_ID) ?: return@withTransaction false
+        if (!group.isInbox || group.deletedAt != null || group.name != "收件箱") return@withTransaction false
+        dao.upsertGroup(
+            group.copy(
+                name = "日常",
+                updatedAt = System.currentTimeMillis(),
+                deviceId = deviceId(),
+                revision = group.revision + 1
+            )
+        )
+        true
+    }
+
     suspend fun deviceId(): String = ensureMetadata().deviceId
 
     suspend fun addTodo(date: String, title: String, note: String = ""): TodoItem {
@@ -430,13 +444,23 @@ class LimeDayRepository(private val database: AppDatabase) {
             dao.deleteTodosById(suppressedIds)
         }
         dao.upsertTodos(merged.todos)
-        dao.upsertGroups(merged.groups)
+        val normalizedGroups = merged.groups.map { group ->
+            if (group.id == TodoDefaults.INBOX_GROUP_ID && group.isInbox && group.deletedAt == null && group.name == "收件箱") {
+                group.copy(
+                    name = "日常",
+                    updatedAt = System.currentTimeMillis(),
+                    deviceId = deviceId(),
+                    revision = group.revision + 1
+                )
+            } else group
+        }
+        dao.upsertGroups(normalizedGroups)
         dao.upsertSteps(merged.steps)
         dao.upsertTodoTombstones(merged.todoTombstones)
         dao.upsertReviews(merged.reviews)
         dao.upsertSummaries(merged.summaries)
         dao.upsertRangeSummaries(merged.rangeSummaries)
-        merged.copy(generatedAt = System.currentTimeMillis(), deviceId = deviceId())
+        merged.copy(generatedAt = System.currentTimeMillis(), deviceId = deviceId(), groups = normalizedGroups)
     }
 
     suspend fun exportJson(): String = snapshot().toJson()
